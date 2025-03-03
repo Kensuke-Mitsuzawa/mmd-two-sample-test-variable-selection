@@ -4,7 +4,6 @@ import copy
 import dask
 import dask.config
 import gc
-from dataclasses import dataclass
 from pathlib import Path
 
 import toml
@@ -17,25 +16,25 @@ from distributed import Client, LocalCluster
 
 from ..logger_unit import handler
 
-
-# importing CV-selection
-from ..detection_algorithm import CrossValidationInterpretableVariableDetector
-# importing wasserstein-independence
-from ..weights_initialization import weights_initialization
-# importing linear_variable_selection
-from ..baselines.regression_based_variable_selection import tst_based_regression_tuner
-
 from ..datasets import (
     BaseDataset,
     FileBackendStaticDataset,
     FileBackendOneTimeLoadStaticDataset,
-    SimpleDataset,
-    FileBackendSensorSampleBasedDataset
+    SimpleDataset
 )
 
-from . import data_objects
-from . import module_wasserstein_independent
-from . import module_linear_variable_selection
+from .module_configs import (
+    CvSelectionConfigArgs,
+    PossibleDataCharacteristic,
+    LinearVariableSelectionConfigArgs,
+)
+from .interface_config_args import (
+    InterfaceConfigArgs,
+)
+from .data_objects import BasicVariableSelectionResult, OutputObject
+
+from .module_utils_wasserstein_independent import module_wasserstein_independent
+from .module_linear_regression import module_linear_variable_selection
 from .dataset_generater import DatasetGenerater, PossibleInputType
 from .module_sample_based import module_mmd_sample_based
 
@@ -48,7 +47,7 @@ logger.addHandler(handler)
 
 
 class Interface(object):
-    def __init__(self, config_args: data_objects.InterfaceConfigArgs):
+    def __init__(self, config_args: InterfaceConfigArgs):
         """I do not describe arguments here. Please refer to `InterfaceConfigArgs`.
         """
         # --------------------------------------------------------------------------- #
@@ -60,7 +59,7 @@ class Interface(object):
         self.path_ml_logger_dir: ty.Optional[Path] = None
         self.path_model_dir: ty.Optional[Path] = None
         
-        self.detection_sample_based: ty.Optional[data_objects.BasicVariableSelectionResult] = None
+        self.detection_sample_based: ty.Optional[BasicVariableSelectionResult] = None
         # --------------------------------------------------------------------------- #        
         
         self.config_args = config_args
@@ -87,7 +86,7 @@ class Interface(object):
                 logger.debug(f'Creating local dask cluster...')
                 __distination = f'{dask_config.dask_scheduler_host}:{dask_config.dask_scheduler_port}'
                 
-                if self.config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None and isinstance(self.config_args.detector_algorithm_config_args.mmd_cv_selection_args, data_objects.CvSelectionConfigArgs):
+                if self.config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None and isinstance(self.config_args.detector_algorithm_config_args.mmd_cv_selection_args, CvSelectionConfigArgs):
                     is_use_dataloader_workers = self.config_args.detector_algorithm_config_args.mmd_cv_selection_args.dataloader_n_workers_train_dataloader > 0 or\
                         self.config_args.detector_algorithm_config_args.mmd_cv_selection_args.dataloader_n_workers_validation_dataloader > 0
                 else:
@@ -131,7 +130,7 @@ class Interface(object):
         """
         if self.config_args.approach_config_args.approach_data_representation == 'sample_based':
             # three possible data representation: static, sensro_st, trajectory_st
-            assert self.config_args.data_config_args.dataset_type_charactersitic in data_objects.PossibleDataCharacteristic
+            assert self.config_args.data_config_args.dataset_type_charactersitic in PossibleDataCharacteristic
             if self.config_args.data_config_args.dataset_type_charactersitic == 'static':
                 # all approach_variable_detector
                 pass
@@ -226,13 +225,6 @@ class Interface(object):
             f'path_work_dir must be Path object. Are you giving in str? Something bug?'
         path_data_dir = self.config_args.resource_config_args.path_work_dir / self.config_args.resource_config_args.dir_name_data
 
-        # if self.config_args.resource_config_args.dask_config_preprocessing.distributed_mode == 'dask':
-        #     dask_cluster_preprocessing, dask_client = self.__init_dask_client(cluster_mode='preprocessing')
-        # else:
-        #     dask_cluster_preprocessing = None
-        #     dask_client = None
-        # # end if
-        
         logger.debug(f'Validating and initializaing datasets...')
         seq_train_dataset_obj: ty.List[BaseDataset]
         train_input_data_x, train_input_data_y = self.__input_data_preparation(
@@ -287,18 +279,6 @@ class Interface(object):
             seq_test_dataset_obj = None
         # end if
         
-        # if dask_client is not None:
-        #     dask_client.close()
-        #     del dask_client
-        #     gc.collect()
-        # # end if
-        
-        # if dask_cluster_preprocessing is not None:
-        #     dask_cluster_preprocessing.close()
-        #     del dask_cluster_preprocessing
-        #     gc.collect()
-        # # end if
-        
         return seq_train_dataset_obj, seq_test_dataset_obj
     
     # --------------------------------------------------------------------------- #
@@ -309,7 +289,7 @@ class Interface(object):
                                               seq_dataset_train: ty.List[BaseDataset], 
                                               seq_dataset_test: ty.Optional[ty.List[BaseDataset]],
                                               dask_client: ty.Optional[Client] = None
-                                              ) -> data_objects.BasicVariableSelectionResult:
+                                              ) -> BasicVariableSelectionResult:
         """Running detection task for sample-based data representation.
         """
         assert len(seq_dataset_train) == 1
@@ -325,7 +305,7 @@ class Interface(object):
             selection_result = module_wasserstein_independent.main(dataset_train, dataset_test, self.config_args.resource_config_args, dask_client)
         elif self.config_args.approach_config_args.approach_variable_detector == 'linear_variable_selection':
             assert self.config_args.detector_algorithm_config_args.linear_variable_selection_args is not None
-            assert isinstance(self.config_args.detector_algorithm_config_args.linear_variable_selection_args, data_objects.LinearVariableSelectionConfigArgs)
+            assert isinstance(self.config_args.detector_algorithm_config_args.linear_variable_selection_args, LinearVariableSelectionConfigArgs)
             assert self.path_model_dir is not None, 'self.path_model_dir is not set.'
             selection_result = module_linear_variable_selection.main(
                 dataset_train=dataset_train, 
@@ -351,7 +331,7 @@ class Interface(object):
         assert toml_path.exists(), f'{toml_path} does not exist.'
         config_obj = toml.load(toml_path)
         logger.debug(f'config toml file from {toml_path}, validating...')
-        args_obj = dacite.from_dict(data_objects.InterfaceConfigArgs, config_obj)
+        args_obj = dacite.from_dict(InterfaceConfigArgs, config_obj)
         logger.debug(f'The config toml file is valid.')
         
         return cls(args_obj)
@@ -407,13 +387,13 @@ class Interface(object):
             gc.collect()
         # end if
         
-    def get_result(self, output_mode: str = 'simple') -> data_objects.OutputObject:
+    def get_result(self, output_mode: str = 'simple') -> OutputObject:
         assert output_mode in ['simple', 'verbose']
         assert self.detection_sample_based is not None, \
             'fit() is not called yet. Please call fit() before calling get_result().'
                 
         if output_mode == 'simple':
-            __detection: data_objects.BasicVariableSelectionResult = copy.deepcopy(self.detection_sample_based)
+            __detection: BasicVariableSelectionResult = copy.deepcopy(self.detection_sample_based)
             __detection.verbose_field = None
         else:
             __detection = self.detection_sample_based
@@ -421,7 +401,7 @@ class Interface(object):
         detection_result_sample_based = __detection
          
         # TODO I need integration, reshaping output objects here. May be in `get_result()`.
-        object_return = data_objects.OutputObject(
+        object_return = OutputObject(
             configurations=self.config_args,
             detection_result_sample_based=detection_result_sample_based)
         return object_return

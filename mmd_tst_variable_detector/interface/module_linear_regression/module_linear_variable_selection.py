@@ -8,20 +8,20 @@ from sklearn.svm import SVR
 
 from distributed import Client
 
-from ..baselines.regression_based_variable_selection import tst_based_regression_tuner
-from ..baselines.regression_based_variable_selection.data_models import CandidateModelContainer
-from ..utils.evaluate_variable_detection import evaluate_trained_variables
-from ..utils import PostProcessLoggerHandler
+from ...baselines.regression_based_variable_selection import tst_based_regression_tuner
+from ...baselines.regression_based_variable_selection.data_models import CandidateModelContainer
+from ...utils.evaluate_variable_detection import evaluate_trained_variables
+from ...utils import PostProcessLoggerHandler
 
-from ..datasets import BaseDataset
-from ..datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
+from ...datasets import BaseDataset
+from ...datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
 
-from ..logger_unit import handler
+from ...logger_unit import handler
 
-from .data_objects import (
+from ..data_objects import (
     BasicVariableSelectionResult,
-    LinearVariableSelectionConfigArgs
 )
+from ..module_configs import LinearVariableSelectionConfigArgs
 
 
 logger = logging.getLogger(f'{__package__}.{__name__}')

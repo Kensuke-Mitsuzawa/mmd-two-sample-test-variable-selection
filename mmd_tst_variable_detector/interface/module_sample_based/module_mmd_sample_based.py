@@ -22,13 +22,17 @@ from ...distance_module import L2Distance
 from ...detection_algorithm.cross_validation_detector import (
     CrossValidationInterpretableVariableDetector,
     CrossValidationTrainedParameter,
-    # InterpretableMmdTrainParameters,
-    # DistributedComputingParameter,
-    # CrossValidationAlgorithmParameter,
-    # CrossValidationTrainParameters,
 )
-# from ...detection_algorithm.search_regularization_min_max import RegularizationSearchParameters
-# from ...weights_initialization.weights_initialization import weights_initialization
+from ..module_configs import ApproachConfigArgs
+from ..module_configs.algorithm_configs.algorithm_config import (
+    CvSelectionConfigArgs,
+    AlgorithmOneConfigArgs,
+)
+from ..interface_config_args import (
+    DetectorAlgorithmConfigArgs,
+    InterfaceConfigArgs
+)
+
 
 # Algorithm one
 from ...detection_algorithm import detection_algorithm_one, AlgorithmOneResult
@@ -36,7 +40,7 @@ from ...detection_algorithm import detection_algorithm_one, AlgorithmOneResult
 from ...assessment_helper import default_settings
 
 from .. import data_objects
-from .. import module_mmd_config
+from ..module_configs.algorithm_configs import module_mmd_config
 
 from ...logger_unit import handler
 
@@ -45,18 +49,88 @@ logger = logging.getLogger(f'{__package__}.{__name__}')
 logger.addHandler(handler)
 
 
+
+def get_mmd_config_args(approach_config_args: ApproachConfigArgs,
+                        detector_algorithm_config_args: DetectorAlgorithmConfigArgs
+                        ) -> ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs]:
+
+    if approach_config_args.approach_interpretable_mmd == 'cv_selection':
+        mmd_config_args: CvSelectionConfigArgs = detector_algorithm_config_args.mmd_cv_selection_args
+
+        assert mmd_config_args is not None, 'mmd_cv_selection_args is not given.'
+        assert isinstance(mmd_config_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
+    elif approach_config_args.approach_interpretable_mmd == 'algorithm_one':
+        mmd_config_args: AlgorithmOneConfigArgs = detector_algorithm_config_args.mmd_algorithm_one_args
+
+        assert mmd_config_args is not None, 'mmd_algorithm_one_args is not given.'
+        assert isinstance(mmd_config_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
+    else:
+        raise ValueError(f'config_args.approach_config_args.approach_interpretable_mmd: {approach_config_args.approach_interpretable_mmd}')
+    # end if
+
+    return mmd_config_args
+
+
+
+def computing_l1_distance_d_dim(input_dataset: BaseDataset, index_dimension: int) -> ty.Tuple[int, float]:    
+    tensor_x, tensor_y = input_dataset.get_samples_at_dimension_d(index_dimension)
+    
+    l1_distance = torch.abs(tensor_x - tensor_y).sum()
+    
+    return index_dimension, l1_distance.item()
+
+
+def get_initial_weights_before_search(dataset: BaseDataset, 
+                                      dask_client: ty.Optional[Client] = None,
+                                      strategy: str = 'all_one') -> np.ndarray:
+    """Private. TODO This function must be integrated to the interior of CV-interface.
+    A core of this experiment. It initializes a set of weights before the Optuna Parameter search.
+    I want to know if this initial search contributes to speed performance/epoch size while keeping the detection quality.
+    """
+    assert strategy in ['all_one', 'wasserstein'], f'Unexpected strategy: {strategy}'
+    if strategy == 'waterstein':
+        raise NotImplementedError('For the moment, I do not confirm validness of this strategy strategy == "waterstein". Stop the execution here.')
+        initial_value = weights_initialization(dataset, approach_name='wasserstein', dask_client=dask_client)
+    elif strategy == 'all_one':
+        x_dimension_x = dataset.get_dimension_flattened()
+        # end if
+        
+        if dataset.is_dataset_on_ram():
+            dataset = dataset.generate_dataset_on_ram()
+        # end if
+        
+        is_tensor_ram = dataset.is_dataset_on_ram() and hasattr(dataset, f'_{dataset.__class__.__name__}__tensor_x') and hasattr(dataset, f'_{dataset.__class__.__name__}__tensor_y')
+
+        results = [computing_l1_distance_d_dim(dataset, __index_d) for __index_d in range(x_dimension_x)]
+        # find dimensions where all 0.0 (L1). If L1 is 0.0 at a dimension d, then I set 0.0 to the initial value.
+        initial_value = np.ones(x_dimension_x)
+        for __index_d, __l1_distance in results:
+            if __l1_distance == 0.0:
+                initial_value[__index_d] = 0.0
+            # end if
+        # end for
+    else:
+        raise NotImplementedError(f'Unexpected strategy: {strategy}')
+    # end if
+
+    return initial_value
+
+
+
 def __main_run(dataset_train: BaseDataset,
-               training_conf_args: data_objects.InterfaceConfigArgs,
+               training_conf_args: InterfaceConfigArgs,
                path_dir_model: Path,
                path_dir_ml_logger: Path,
                dask_client: ty.Optional[Client] = None,
                seed_root_random: int = 42,
                ) -> ty.Union[AlgorithmOneResult, CrossValidationTrainedParameter]:
-    mmd_config_args = module_mmd_config.get_mmd_config_args(training_conf_args)
+    mmd_config_args = get_mmd_config_args(
+        approach_config_args=training_conf_args.approach_config_args,
+        detector_algorithm_config_args=training_conf_args.detector_algorithm_config_args,
+    )
 
     # comment: for the RAM memory management reasons, I define another variable `dataset_train_for_preprocess`.
     # The content is totally same as `dataset_train`.
-    # if isinstance(dataset_train, FileBackendOneTimeLoadStaticDataset):
     if dataset_train.is_dataset_on_ram():
         dataset_train_for_preprocess = dataset_train.generate_dataset_on_ram()
     else:
@@ -64,7 +138,7 @@ def __main_run(dataset_train: BaseDataset,
     # end if
     
     # get initial weights.
-    initial_value = module_mmd_config.get_initial_weights_before_search(dataset=dataset_train_for_preprocess, dask_client=dask_client)
+    initial_value = get_initial_weights_before_search(dataset=dataset_train_for_preprocess, dask_client=dask_client)
     # initialization of Kernel instance.
     # initialization of MMD instance.
     kernel = QuadraticKernelGaussianKernel.from_dataset(
@@ -80,21 +154,15 @@ def __main_run(dataset_train: BaseDataset,
     else:
         dask_scheduler_address = ''
     # end if
+
+    # Obtaining the optimiser configuration.
+    cv_train_param, pl_param = training_conf_args.detector_algorithm_config_args.mmd_optimiser_configs.get_configs(
+        path_work_dir=path_dir_model, 
+        dask_scheduler_address=dask_scheduler_address, 
+        algorithm_config=mmd_config_args,
+        resource_config_args=training_conf_args.resource_config_args)
     
-    if mmd_config_args.setting_name == 'config_rapid':
-        __class_config = module_mmd_config.ConfigRapid()
-        cv_train_param, pl_param = __class_config.get_configs(path_dir_model, dask_scheduler_address, training_conf_args)
-    elif mmd_config_args.setting_name == 'config_tpami_draft':
-        __class_config = module_mmd_config.ConfigTPamiDraft()
-        cv_train_param, pl_param = __class_config.get_configs(path_dir_model, dask_scheduler_address, training_conf_args)
-    elif mmd_config_args.setting_name == 'custom':
-        assert mmd_config_args.custom_mmd_variable_selection_config is not None, 'custom_mmd_variable_selection_config is not given.'
-        assert isinstance(mmd_config_args.custom_mmd_variable_selection_config, module_mmd_config.MmdOptimisationConfigTemplate), 'Invalid Class objects. Type Error.'
-        cv_train_param, pl_param = mmd_config_args.custom_mmd_variable_selection_config.get_configs(path_dir_model, dask_scheduler_address, training_conf_args)    # type: ignore
-    else:
-        raise ValueError(f'Unexpected setting name: {mmd_config_args.setting_name}')
-    # end if
-    
+    # setting MLFlow logger
     post_process_handler = PostProcessLoggerHandler(
         loggers=['mlflow'],
         logger2config={
@@ -104,7 +172,7 @@ def __main_run(dataset_train: BaseDataset,
             }})
     
     
-    if isinstance(mmd_config_args, data_objects.CvSelectionConfigArgs):
+    if isinstance(mmd_config_args, CvSelectionConfigArgs):
         detector = CrossValidationInterpretableVariableDetector(
             pytorch_trainer_config=pl_param,
             training_parameter=cv_train_param,
@@ -112,11 +180,11 @@ def __main_run(dataset_train: BaseDataset,
             post_process_handler=post_process_handler,
             seed_root_random=seed_root_random)
         res = detector.run_cv_detection(dataset_train)
-    elif isinstance(mmd_config_args, data_objects.AlgorithmOneConfigArgs):
+    elif isinstance(mmd_config_args, AlgorithmOneConfigArgs):
         # comment: I take `cv_config` for common.
         logger.debug('Running Algorithm One...')
-        # spliting dataset into train/dev
         
+        # spliting dataset into train/dev
         data_split_obj = dataset_train.split_train_and_test(
             train_ratio=mmd_config_args.train_dev_split_ratio,
             random_seed=seed_root_random)
@@ -143,16 +211,16 @@ def __main_run(dataset_train: BaseDataset,
     return res
 
 
-def main(config_args: data_objects.InterfaceConfigArgs,
+def main(config_args: InterfaceConfigArgs,
          dataset_train: BaseDataset,
          dask_client: ty.Optional[Client] = None, 
          dataset_test: ty.Optional[BaseDataset] = None,) -> data_objects.BasicVariableSelectionResult:
     assert (config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None) or (config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None),\
         'Either of "mmd_cv_selection_args" or "mmd_algorithm_one_args" must be given.'
     if config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None:
-        assert isinstance(config_args.detector_algorithm_config_args.mmd_cv_selection_args, data_objects.CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
+        assert isinstance(config_args.detector_algorithm_config_args.mmd_cv_selection_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
     if config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None and config_args.detector_algorithm_config_args.mmd_algorithm_one_args != '':
-        assert isinstance(config_args.detector_algorithm_config_args.mmd_algorithm_one_args, data_objects.AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
+        assert isinstance(config_args.detector_algorithm_config_args.mmd_algorithm_one_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
     # end if
     
     path_resource_root = Path(config_args.resource_config_args.path_work_dir)

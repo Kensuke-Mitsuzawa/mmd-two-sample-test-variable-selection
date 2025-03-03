@@ -146,7 +146,6 @@ class CrossValidationTrainParameters(object):
     distributed_parameter: DistributedComputingParameter
     computation_backend: str = 'dask'  # local or dask
     dist_parameter: ty.Optional[DistributedComputingParameter] = None
-    wandb_logger_parameter = None    
 
     def __post_init__(self):
         assert self.computation_backend in ('single', 'dask', 'joblib')
@@ -155,11 +154,6 @@ class CrossValidationTrainParameters(object):
             logger.warning("dist_parameter is deprecated. Use distributed_parameter instead.")
             self.distributed_parameter = self.dist_parameter
         # end if
-        
-        if self.wandb_logger_parameter is not None:
-            raise ValueError(
-                "wandb_logger_parameter is deprecated. Delete it. Use post-process-logger instead."\
-                    "Adding `PostProcessLoggerHandler` to `CrossValidationInterpretableVariableDetector`")
 
 # -------------------------------------------------------------
 # Trained parameter

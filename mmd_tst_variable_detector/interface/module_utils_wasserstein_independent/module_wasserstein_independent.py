@@ -1,26 +1,23 @@
 import typing as ty
 import logging
-import functools
 
-import ot
-import geomloss
 import numpy as np
-import torch
 import torch.utils.data
 
 from distributed import Client
 
-from ..datasets import BaseDataset
-from ..datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset 
-from ..weights_initialization import weights_initialization
-from ..utils import (
+from ...datasets import BaseDataset
+from ...weights_initialization import weights_initialization
+from ...utils import (
     detect_variables,
 )
 
-from ..logger_unit import handler
+from ...logger_unit import handler
 
-from .data_objects import BasicVariableSelectionResult
-from .module_utils_wasserstein_independent import evaluation_after_detection
+from ..data_objects import BasicVariableSelectionResult
+from . import evaluation_after_detection
+
+from ..module_configs import ResourceConfigArgs
 
 logger = logging.getLogger(__name__)
 logger.addHandler(handler)
@@ -139,7 +136,7 @@ logger.addHandler(handler)
 
 def main(dataset_obj_train: BaseDataset, 
          dataset_obj_test: ty.Optional[BaseDataset], 
-         resource_config: "ResourceConfigArgs",  # I can not import due to circular import.
+         resource_config: ResourceConfigArgs,  # I can not import due to circular import.
          dask_client: ty.Optional[Client] = None) -> BasicVariableSelectionResult:    
     initial_weights = weights_initialization(
         dataset_obj_train, 

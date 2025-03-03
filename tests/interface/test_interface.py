@@ -16,16 +16,18 @@ import toml
 from mmd_tst_variable_detector.interface import interface, InterfaceConfigArgs
 from mmd_tst_variable_detector.logger_unit import handler
 from mmd_tst_variable_detector import (
+    BasicVariableSelectionResult,
+    RegularizationSearchParameters
+)
+from mmd_tst_variable_detector.interface.module_configs import (
     ResourceConfigArgs,
     ApproachConfigArgs,
     DataSetConfigArgs,
-    DetectorAlgorithmConfigArgs,
-    CvSelectionConfigArgs,
-    LinearVariableSelectionConfigArgs,
-    BasicVariableSelectionResult,
     DistributedConfigArgs,
-    RegularizationSearchParameters
+    CvSelectionConfigArgs,
+    LinearVariableSelectionConfigArgs
 )
+from mmd_tst_variable_detector.interface.interface_config_args import DetectorAlgorithmConfigArgs
 from mmd_tst_variable_detector.assessment_helper.data_generator import sampling_from_distribution
 
 
