@@ -48,13 +48,6 @@ Dara Source type
 RAM or File.
 
 
-Algorithm type
---------------------
-
-There are roughly two types of algorithms; sample-based and time-slicing.
-
-The time-slicing dataset takes just a one pair of X, Y.
-
 Expected Input Form
 --------------------
 
@@ -109,13 +102,11 @@ class DatasetGenerater(object):
                  data_y: PossibleInputType,
                  dataset_type_backend: str,
                  dataset_type_charactersitic: str,
-                 dataset_type_algorithm: str,
-                 is_value_between_timestamp: bool,
-                 time_slicing_per: ty.Optional[ty.Union[int, str, ty.List[int]]] = 'auto',
+                 dataset_type_algorithm: str = 'dataset_type_algorithm',
                  time_aggregation_per: ty.Optional[int] = 100,
                  key_name_array: ty.Optional[str] = 'array',
-                 path_work_dir: ty.Optional[Path] = Path('/tmp/dataset_generater'),
-                 dataset_client: ty.Optional[Client] = None,):
+                 path_work_dir: ty.Optional[Path] = Path('/tmp/dataset_generater')
+                 ):
         """
         Parameters
         ----------
@@ -127,25 +118,17 @@ class DatasetGenerater(object):
         dataset_type_backend : str
             'ram' or 'file' or 'flexible-file'.
         dataset_type_charactersitic : str
-            'static', 'sensor_st', 'trajectory_st'
+            'static', 'sensor_st'
         dataset_type_algorithm: str
-            'sample_based', 'time_slicing'
-        time_slicing_per: int
-            This is only used when dataset_type_algorithm is 'time_slicing'.
-            This is the number of timestamps per batch.
+            'sample_based',
         time_aggregation_per: int
             This is only used when dataset_type_algorithm is 'sample_based'.
-            This is the number of timestamp to be aggregated.
+            This is the number of timestamp to be aggregated.            
         key_name_array: str
             When the data-source is from file, each torch `.pt` file must contain a dictionary.
             The `key_name_array` specifies the key name of the array.
         path_work_dir: Path
-            This is only used when dataset_type_algorithm is 'time_slicing'.
-            This is the path to save the time-slicing dataset.
             Be informed that your disk has enough space to save the dataset.
-        dataset_client: Client
-            This is only used when dataset_type_algorithm is 'time_slicing'.
-            This is the dask client to be used for parallel computing.
         """
         # --------------------------------------------------------------------
         # definitions
@@ -157,23 +140,18 @@ class DatasetGenerater(object):
         
         self.seq_path_x: ty.Optional[ty.List[Path]] = None
         self.seq_path_y: ty.Optional[ty.List[Path]] = None
-        
-        self.dataset_client = dataset_client
         # --------------------------------------------------------------------
         
         assert dataset_type_backend in ('ram', 'file', 'flexible-file')
-        assert dataset_type_charactersitic in ('static', 'sensor_st', 'trajectory_st')
-        assert dataset_type_algorithm in ('sample_based', 'time_slicing')
+        assert dataset_type_charactersitic in ('static', 'sensor_st',)
+        assert dataset_type_algorithm in ('sample_based',)
         
         self.dataset_type_backend = dataset_type_backend
         self.dataset_type_charactersitic = dataset_type_charactersitic
         self.dataset_type_algorithm = dataset_type_algorithm
         
-        self.time_slicing_per = time_slicing_per
         self.time_aggregation_per = time_aggregation_per
         self.key_name_array = key_name_array
-        
-        self.is_value_between_timestamp = is_value_between_timestamp
 
         if path_work_dir is None:
             self.path_work_dir = Path('/tmp/dataset_generater')
@@ -207,15 +185,7 @@ class DatasetGenerater(object):
         
         self.seq_path_x = seq_path_x
         self.seq_path_y = seq_path_y
-                
-    def __validate_case_time_slicing(self, path_x: Path, path_y: Path):
-        assert self.dataset_type_backend in ('file', 'flexible-file'), f'dataset_type_backend must be file or filexible-file. INPUT -> {self.dataset_type_backend}'
-        assert self.dataset_type_charactersitic in ('sensor_st', 'trajectory_st'), 'dataset_type_charactersitic must be sensor_st or trajectory_st.'
-        assert self.dataset_type_algorithm in ('time_slicing',), 'dataset_type_algorithm must be time_slicing.'
-        
-        self.path_x = path_x
-        self.path_y = path_y
-        
+                        
     def __validation_case_ram(self, array_x, array_y):
         """Currently, thie case is for "ram", "static", "sample-based".
         """
@@ -354,159 +324,7 @@ class DatasetGenerater(object):
         # end if
         dataset.run_files_validation()
         
-        return dataset    
-    
-    # --------------------------------------------------------------------
-    # Private API for manipulating files, for time-slicing algorithm.
-    
-    
-    @staticmethod
-    def __func_sub_distributed__split_into_timestamps(args: _ArgFuncDistributed) -> ty.Tuple[int, Path]:
-        """Only for time-slicing algorithm.
-        An actual function of splitting a single (|S|, |T|) file into a set of (|S|) files.
-        
-        Returns
-        -------
-        ty.Tuple[int, Path]
-            timestamp and the path to the directory, a parent directory of x.pt and y.pt.
-        """
-        timestamp: int = args.timestamp
-        torch_x: ty.Union[Path, torch.Tensor] = args.torch_x
-        torch_y: ty.Union[Path, torch.Tensor] = args.torch_y
-        path_word_dir: Path = args.path_word_dir
-        dataset_type_charactersitic: str = args.dataset_type_charactersitic
-        is_value_between_timestamp: bool = args.is_value_between_timestamp
-        
-        if isinstance(torch_x, Path):
-            torch_x = torch.load(torch_x)
-        # end if            
-        if isinstance(torch_y, Path):
-            torch_y = torch.load(torch_y)
-        # end if
-        
-        assert isinstance(torch_x, torch.Tensor), 'torch_x must be torch.Tensor.'
-        assert isinstance(torch_y, torch.Tensor), 'torch_y must be torch.Tensor.'
-        
-        __path_data_dir = path_word_dir / f'{timestamp}'
-        __path_data_dir.mkdir(parents=True, exist_ok=True)
-
-        if dataset_type_charactersitic == 'sensor_st':
-            __one_sample_x = torch_x[:, timestamp]
-            __one_sample_y = torch_y[:, timestamp]
-        elif dataset_type_charactersitic == 'trajectory_st':
-            if is_value_between_timestamp:
-                __one_sample_x = torch_x[:, (timestamp + 1), :] - torch_x[:, timestamp, :]
-                __one_sample_y = torch_y[:, (timestamp + 1), :] - torch_y[:, timestamp, :]
-            else:
-                __one_sample_x = torch_x[:, timestamp, :]
-                __one_sample_y = torch_y[:, timestamp, :]
-        else:
-            raise NotImplementedError('Undefiend case. Aborting.')
-        # end if
-        
-        __one_sample_x_clone = __one_sample_x.clone()
-        __one_sample_y_clone = __one_sample_y.clone()
-        
-        torch.save({'array': __one_sample_x_clone}, __path_data_dir / 'x.pt')
-        torch.save({'array' :__one_sample_y_clone}, __path_data_dir / 'y.pt')
-
-        return timestamp, __path_data_dir
-    
-    def __split_into_timestamps(self, 
-                                path_data_x: Path, 
-                                path_data_y: Path, 
-                                path_word_dir: Path,
-                                is_value_between_timestamp: bool) -> ty.List[Path]:
-        """Private API. Called by `__generate_file_backend_any_time_slicing_dataset`.
-        Splitting an array of Spatio-Temporal data into a set of arrays by timestamps.
-        
-        Parameters
-        ----------
-        is_value_between_timestamp : bool
-            If True, the array element is a value of (t+1) - t, which is a time difference.
-            If False, the array element is a value of t.
-            When True, the sample size is |T|-1.
-            
-        Returns
-        -------
-        a list of parent directory paths. A parent directory is a parent of x.pt and y.pt.
-        Ex. the parent directory is named timestamp number, such as `0`, `1`, `2`, ...
-        """
-        # warning: when is_value_between_timestamp=False and dataset_type_charactersitic=trajectory_st
-        if is_value_between_timestamp is False and self.dataset_type_charactersitic == 'trajectory_st':
-            logger.warning('ARE YOU SURE THAT is_value_between_timestamp=False and dataset_type_charactersitic=trajectory_st? Just for Confirmation.')
-        # end if
-        
-        d_x = torch.load(path_data_x)    
-        torch_x: torch.Tensor = d_x[self.key_name_array]
-
-        d_y = torch.load(path_data_y)    
-        torch_y: torch.Tensor = d_y[self.key_name_array]
-        
-        assert torch_x.shape == torch_y.shape, 'X and Y must be same shape.'
-        
-        if self.dataset_type_charactersitic == 'sensor_st':
-            assert len(torch_x.shape) == 2, 'The data shape must be 2D.'
-        elif self.dataset_type_charactersitic == 'trajectory_st':
-            assert len(torch_x.shape) == 3, 'The data shape must be 3D.'
-        else:
-            raise NotImplementedError('Undefiend case. Aborting.')
-        # end if
-        
-        path_word_dir.mkdir(parents=True, exist_ok=True)
-        
-        if is_value_between_timestamp:
-            n_timestamps = torch_x.shape[1] - 1
-        else:
-            n_timestamps = torch_x.shape[1]
-        # end if
-        
-        seq_parent_dir: ty.List[Path] = []
-    
-        logger.info(f'n_timestamps={n_timestamps}. Start splitting...')
-    
-        if self.dataset_client is None:
-            seq_args = []
-            for __timestamp in range(0, n_timestamps):
-                __args = _ArgFuncDistributed(
-                    timestamp=__timestamp,
-                    torch_x=torch_x,
-                    torch_y=torch_y,
-                    path_word_dir=path_word_dir,
-                    dataset_type_charactersitic=self.dataset_type_charactersitic,
-                    is_value_between_timestamp=is_value_between_timestamp)
-                seq_args.append(__args)
-            # end for            
-            t_process_out = [self.__func_sub_distributed__split_into_timestamps(__args) for __args in tqdm(seq_args)]
-        else:
-            logger.debug(f'Generating timeslicing datasets by dask.')
-            seq_args = []
-
-            __path_tmp = Path(mkdtemp())
-            __path_tmp.mkdir(parents=True, exist_ok=True)
-            torch.save(torch_x, __path_tmp / 'x.pt')
-            torch.save(torch_y, __path_tmp / 'y.pt')
-            
-            for __timestamp in range(0, n_timestamps):
-                __args = _ArgFuncDistributed(
-                    timestamp=__timestamp,
-                    torch_x=__path_tmp / 'x.pt',
-                    torch_y=__path_tmp / 'y.pt',
-                    path_word_dir=path_word_dir,
-                    dataset_type_charactersitic=self.dataset_type_charactersitic,
-                    is_value_between_timestamp=is_value_between_timestamp)
-                seq_args.append(__args)
-            # end for            
-            
-            __dask_queue = self.dataset_client.map(self.__func_sub_distributed__split_into_timestamps, seq_args)
-            t_process_out = self.dataset_client.gather(__dask_queue)
-        # end if
-        
-        sorted_t_process_out = sorted(t_process_out, key=lambda x: x[0])  # sort by timestamp  # type: ignore
-        seq_parent_dir = [__t[1] for __t in sorted_t_process_out]
-        logger.info(f'Timeslicing datasets are ready to use.')
-        
-        return seq_parent_dir
+        return dataset
       
     # --------------------------------------------------------------------
     # Public API
@@ -544,14 +362,6 @@ class DatasetGenerater(object):
                 dataset = self.__generate_file_backend_static_dataset()
                 generated_datasets.append(dataset)
             elif self.dataset_type_charactersitic in ('sensor_st',):
-                # TODO
-                # two cases; time_slicing and sample_based
-                # if self.dataset_type_algorithm == 'time_slicing':
-                #     logger.info(f'Case: dataset_type_backend={self.dataset_type_backend} \
-                #         and dataset_type_charactersitic={self.dataset_type_charactersitic} \
-                #             and dataset_type_algorithm={self.dataset_type_algorithm}')
-                #     __seq_dataset = self.__generate_file_backend_any_time_slicing_dataset()
-                #     generated_datasets = __seq_dataset
                 if self.dataset_type_algorithm == 'sample_based':
                     logger.info(f'Case: FileBackendSensorSampleBasedDataset.')
                     dataset = self.__generate_file_backend_sensor_dataset()

@@ -61,18 +61,17 @@ class Interface(object):
         self.path_model_dir: ty.Optional[Path] = None
         
         self.detection_sample_based: ty.Optional[data_objects.BasicVariableSelectionResult] = None
-        self.detection_time_slicing: ty.Optional[ty.List[data_objects.BasicVariableSelectionResult]] = None
         # --------------------------------------------------------------------------- #        
         
         self.config_args = config_args
         self.__validate_approach_parameters()
         
-    def __init_dask_client(self, cluster_mode: str) -> ty.Tuple[ty.Optional[LocalCluster], ty.Optional[Client]]:
-        assert cluster_mode in ('preprocessing', 'detection'), f'Invalid cluster_mode: {cluster_mode}'
+    def __init_dask_client(self, cluster_mode: str = 'detection') -> ty.Tuple[ty.Optional[LocalCluster], ty.Optional[Client]]:
+        assert cluster_mode in ('detection', ), f'Invalid cluster_mode: {cluster_mode}'
         
-        if cluster_mode == 'preprocessing':
-            dask_config = self.config_args.resource_config_args.dask_config_preprocessing
-        elif cluster_mode == 'detection':
+        # if cluster_mode == 'preprocessing':
+        #     dask_config = self.config_args.resource_config_args.dask_config_preprocessing
+        if cluster_mode == 'detection':
             dask_config = self.config_args.resource_config_args.dask_config_detection
         else:
             raise ValueError(f'Invalid cluster_mode: {cluster_mode}')
@@ -141,17 +140,6 @@ class Interface(object):
                 # TODO: working.
                 raise NotImplementedError('This combination is still under development.\
                     I advice using approach_data_representation=`static` intead.')
-            else:
-                raise ValueError(f'Invalid combination of approach_data_representation and dataset_type_charactersitic')
-        elif self.config_args.approach_config_args.approach_data_representation == 'time_slicing':
-            if self.config_args.data_config_args.dataset_type_charactersitic == 'static':
-                raise ValueError('time_slicing is not available for static data.')
-            elif self.config_args.data_config_args.dataset_type_charactersitic == 'sensor_st':
-                # all approach variable detector
-                pass
-            elif self.config_args.data_config_args.dataset_type_charactersitic == 'trajectory_st':
-                assert self.config_args.approach_config_args.approach_variable_detector in ('interpretable_mmd', 'wasserstein_independence'), \
-                    'trajectory_st is only available for interpretable_mmd.'
             else:
                 raise ValueError(f'Invalid combination of approach_data_representation and dataset_type_charactersitic')
         else:
@@ -238,12 +226,12 @@ class Interface(object):
             f'path_work_dir must be Path object. Are you giving in str? Something bug?'
         path_data_dir = self.config_args.resource_config_args.path_work_dir / self.config_args.resource_config_args.dir_name_data
 
-        if self.config_args.resource_config_args.dask_config_preprocessing.distributed_mode == 'dask':
-            dask_cluster_preprocessing, dask_client = self.__init_dask_client(cluster_mode='preprocessing')
-        else:
-            dask_cluster_preprocessing = None
-            dask_client = None
-        # end if
+        # if self.config_args.resource_config_args.dask_config_preprocessing.distributed_mode == 'dask':
+        #     dask_cluster_preprocessing, dask_client = self.__init_dask_client(cluster_mode='preprocessing')
+        # else:
+        #     dask_cluster_preprocessing = None
+        #     dask_client = None
+        # # end if
         
         logger.debug(f'Validating and initializaing datasets...')
         seq_train_dataset_obj: ty.List[BaseDataset]
@@ -257,11 +245,8 @@ class Interface(object):
             dataset_type_charactersitic=self.config_args.data_config_args.dataset_type_charactersitic,
             dataset_type_algorithm=self.config_args.approach_config_args.approach_data_representation,
             time_aggregation_per=self.config_args.data_config_args.time_aggregation_per,
-            time_slicing_per=self.config_args.data_config_args.time_slicing_per,
             key_name_array=self.config_args.data_config_args.key_name_array,
-            path_work_dir=path_data_dir,
-            dataset_client=dask_client,
-            is_value_between_timestamp=self.config_args.data_config_args.is_value_between_timestamp)
+            path_work_dir=path_data_dir)
         seq_train_dataset_obj = train_dataset_generater.get_dataset()
         logger.debug(f'Dataset is ready.')
         
@@ -280,10 +265,8 @@ class Interface(object):
                 dataset_type_charactersitic=self.config_args.data_config_args.dataset_type_charactersitic,
                 dataset_type_algorithm=self.config_args.approach_config_args.approach_data_representation,
                 time_aggregation_per=self.config_args.data_config_args.time_aggregation_per,
-                time_slicing_per=self.config_args.data_config_args.time_slicing_per,
                 key_name_array=self.config_args.data_config_args.key_name_array,
-                path_work_dir=path_data_dir,
-                is_value_between_timestamp=self.config_args.data_config_args.is_value_between_timestamp)
+                path_work_dir=path_data_dir)
             seq_test_dataset_obj = __test_dataset_generater.get_dataset()
             logger.debug(f'Test Dataset is ready.')            
         elif self.config_args.data_config_args.ratio_train_test != -1:
@@ -296,10 +279,6 @@ class Interface(object):
                 __test = train_dataset_obj.split_train_and_test(train_ratio=self.config_args.data_config_args.ratio_train_test)
                 seq_test_dataset_obj = [__test.test_dataset]
                 seq_train_dataset_obj = [__test.train_dataset]
-            elif self.config_args.approach_config_args.approach_data_representation == 'time_slicing':
-                __seq_split_obj_train_test = [__d.split_train_and_test(train_ratio=self.config_args.data_config_args.ratio_train_test) for __d in seq_train_dataset_obj]
-                seq_test_dataset_obj  = [__split.test_dataset for __split in __seq_split_obj_train_test]
-                seq_train_dataset_obj  = [__split.train_dataset for __split in __seq_split_obj_train_test]
             else:
                 raise ValueError(f'Invalid approach_data_representation: {self.config_args.approach_config_args.approach_data_representation}')
         else:
@@ -308,17 +287,17 @@ class Interface(object):
             seq_test_dataset_obj = None
         # end if
         
-        if dask_client is not None:
-            dask_client.close()
-            del dask_client
-            gc.collect()
-        # end if
+        # if dask_client is not None:
+        #     dask_client.close()
+        #     del dask_client
+        #     gc.collect()
+        # # end if
         
-        if dask_cluster_preprocessing is not None:
-            dask_cluster_preprocessing.close()
-            del dask_cluster_preprocessing
-            gc.collect()
-        # end if
+        # if dask_cluster_preprocessing is not None:
+        #     dask_cluster_preprocessing.close()
+        #     del dask_cluster_preprocessing
+        #     gc.collect()
+        # # end if
         
         return seq_train_dataset_obj, seq_test_dataset_obj
     
@@ -412,12 +391,6 @@ class Interface(object):
                 seq_test_dataset,
                 dask_client=dask_client)
             self.detection_sample_based = __detection_sample_based
-        elif self.config_args.approach_config_args.approach_data_representation == 'time_slicing':
-            __detection_time_slicing = self.__run_variable_selection_time_slicing(
-                seq_train_dataset, 
-                seq_test_dataset,
-                dask_client=dask_client)
-            self.detection_time_slicing = __detection_time_slicing
         else:
             raise ValueError(f'Invalid approach_data_representation: {self.config_args.approach_config_args.approach_data_representation}')
         # end if
@@ -436,37 +409,19 @@ class Interface(object):
         
     def get_result(self, output_mode: str = 'simple') -> data_objects.OutputObject:
         assert output_mode in ['simple', 'verbose']
-        assert self.detection_sample_based is not None or self.detection_time_slicing is not None, \
+        assert self.detection_sample_based is not None, \
             'fit() is not called yet. Please call fit() before calling get_result().'
-        
-        if self.detection_sample_based is not None and self.detection_time_slicing is not None:
-            raise Exception('Both detection_sample_based and detection_time_slicing are not None. Unexpected case.')
-        # end if
-        
-        if self.detection_sample_based is None:
-            assert self.detection_time_slicing is not None
-            detection_result_time_slicing = []
-            detection_result_sample_based = None
-            for __det_obj in self.detection_time_slicing:
-                if output_mode == 'simple':
-                    __det_obj.verbose_field = None
-                # end if
-                detection_result_time_slicing.append(__det_obj)
-            # end for
+                
+        if output_mode == 'simple':
+            __detection: data_objects.BasicVariableSelectionResult = copy.deepcopy(self.detection_sample_based)
+            __detection.verbose_field = None
         else:
-            if output_mode == 'simple':
-                __detection: data_objects.BasicVariableSelectionResult = copy.deepcopy(self.detection_sample_based)
-                __detection.verbose_field = None
-            else:
-                __detection = self.detection_sample_based
-            # end if
-            detection_result_sample_based = __detection
-            detection_result_time_slicing = None
+            __detection = self.detection_sample_based
         # end if
+        detection_result_sample_based = __detection
          
         # TODO I need integration, reshaping output objects here. May be in `get_result()`.
         object_return = data_objects.OutputObject(
             configurations=self.config_args,
-            detection_result_sample_based=detection_result_sample_based,
-            detection_result_time_slicing=detection_result_time_slicing)
+            detection_result_sample_based=detection_result_sample_based)
         return object_return

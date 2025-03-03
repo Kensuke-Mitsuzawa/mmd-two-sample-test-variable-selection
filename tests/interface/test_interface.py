@@ -94,8 +94,8 @@ def test_ram_backend_static_dataset_sample_based_linear_variable_selection(resou
         
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
-            dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
-            dask_config_preprocessing=DistributedConfigArgs(distributed_mode='single')),
+            dask_config_detection=DistributedConfigArgs(distributed_mode='single')
+        ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
             approach_variable_detector=test_approach_variable_detector,
@@ -153,7 +153,7 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd(resource_path
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
             dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
-            dask_config_preprocessing=DistributedConfigArgs(distributed_mode='single')),
+        ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
             approach_variable_detector=test_approach_variable_detector,
@@ -209,7 +209,7 @@ def test_ram_backend_static_dataset_sample_based_wasserstein_independence(resour
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
             dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
-            dask_config_preprocessing=DistributedConfigArgs(distributed_mode='single')),
+        ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
             approach_variable_detector=test_approach_variable_detector,
@@ -312,8 +312,6 @@ def test_file_backend_static_dataset_sample_based_wasserstein_independence(resou
 
     config_args.resource_config_args.dask_config_detection = DistributedConfigArgs(
         distributed_mode='single')
-    config_args.resource_config_args.dask_config_preprocessing = DistributedConfigArgs(
-        distributed_mode='single')
         
     # Create the interface
     interface_instance = interface.Interface(config_args=config_args)
@@ -352,8 +350,6 @@ def test_file_backend_static_dataset_sample_based_linear_variable_selection(reso
     
     config_args.resource_config_args.dask_config_detection = DistributedConfigArgs(
         distributed_mode='single')
-    config_args.resource_config_args.dask_config_preprocessing = DistributedConfigArgs(
-        distributed_mode='single')    
     # Create the interface
     interface_instance = interface.Interface(config_args=config_args)
     interface_instance.fit()
@@ -390,8 +386,6 @@ def test_file_backend_static_dataset_sample_based_interpretable_mmd(resource_pat
     
     config_args.resource_config_args.dask_config_detection = DistributedConfigArgs(
         distributed_mode='single')
-    config_args.resource_config_args.dask_config_preprocessing = DistributedConfigArgs(
-        distributed_mode='single')    
     
     # Create the interface
     interface_instance = interface.Interface(config_args=config_args)
@@ -428,8 +422,6 @@ def test_flexible_file_backend_static_dataset_sample_based_wasserstein_independe
     config_args.resource_config_args.path_work_dir = Path(mkdtemp())
     
     config_args.resource_config_args.dask_config_detection = DistributedConfigArgs(
-        distributed_mode='single')
-    config_args.resource_config_args.dask_config_preprocessing = DistributedConfigArgs(
         distributed_mode='single')
     
     # Create the interface
@@ -470,8 +462,6 @@ def test_flexible_file_backend_static_dataset_sample_based_interpretable_mmd(res
     
     config_args.resource_config_args.dask_config_detection = DistributedConfigArgs(
         distributed_mode='single')
-    config_args.resource_config_args.dask_config_preprocessing = DistributedConfigArgs(
-        distributed_mode='single')
     
     # Create the interface
     interface_instance = interface.Interface(config_args=config_args)
@@ -495,11 +485,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     
     path_resource_root = Path('../testresources')
-    
-    # test_file_backend_timeseries_dataset_sample_based(path_resource_root)
-    # test_ram_backend_static_dataset_sample_based_interpretable_mmd(path_resource_root)
-    # test_file_backend_static_dataset_sample_based_interpretable_mmd(path_resource_root)
-    # test_file_backend_static_dataset_sample_based_wasserstein_independence(path_resource_root)
-    # test_file_backend_static_dataset_sample_based_linear_variable_selection(path_resource_root)
-    # test_flexible_file_backend_static_dataset_sample_based_interpretable_mmd(path_resource_root)
-    # test_flexible_file_backend_static_dataset_sample_based_wasserstein_independence(path_resource_root)

@@ -24,7 +24,7 @@ logger.addHandler(handler)
 
 
 
-PossibleDataRepresentation = ('sample_based', 'time_slicing')
+PossibleDataRepresentation = ('sample_based',)
 PossibleVariableDetector = ('wasserstein_independence', 'linear_variable_selection', 'interpretable_mmd')
 PossibleInterpretableMMD = ('cv_selection', 'algorithm_one', '')
 PossibleDataCharacteristic = ('static', 'sensor_st', 'trajectory_st')
@@ -103,11 +103,6 @@ class ResourceConfigArgs:
         Configuration for dask cluster.
     distributed_config_detection: ty.Optional[DistributedConfigArgs]
         Configuration for dask cluster.
-        
-        
-    Updates:
-    --------
-    `dask_config_preprocessing` and `dask_config_detection` will be removed in the future. At the commit: `217309c35803cf1731cf772ebb8c2d05d7910977`
     """
     
     path_work_dir: ty.Union[str, Path, None] = Path('/tmp/mmd_tst_variable_detector/interface')
@@ -120,14 +115,8 @@ class ResourceConfigArgs:
     train_accelerator: str = 'cpu'
     
     # Distributed backend configurations    
-    distributed_config_preprocessing: DistributedConfigArgs = DistributedConfigArgs()
     distributed_config_detection: DistributedConfigArgs = DistributedConfigArgs()
 
-    # demolish the following two fields.
-    # dask_config_preprocessing: DistributedConfigArgs = DistributedConfigArgs()
-    # dask_config_detection: DistributedConfigArgs = DistributedConfigArgs()
-    # I hold these fileds for the version compatibility.
-    dask_config_preprocessing: ty.Optional[DistributedConfigArgs] = None
     dask_config_detection: ty.Optional[DistributedConfigArgs] = None
 
     
@@ -144,7 +133,6 @@ class ResourceConfigArgs:
         # end if    
         
         # I have to set values to `distributed_config_***` becasue a lot of modules use these values.
-        self.dask_config_preprocessing = self.distributed_config_preprocessing
         self.dask_config_detection = self.distributed_config_detection
 
 
@@ -187,15 +175,6 @@ class DataSetConfigArgs:
     file_name_y: str
         File name of data for SampleSet y.
         The same discription as `file_name_x`.
-    time_aggregation_per: int
-        Time aggregation period.
-        This parameter is used only when `dataset_type_charactersitic` is 'sensor_st' or 'trajectory_st'.
-    time_slicing_per: int | str | ty.List[int]s
-        Time slicing period.
-        This parameter is used only when `dataset_type_charactersitic` is 'sensor_st' or 'trajectory_st'.
-        3 possible types of parameters.
-        When `int`, all time-buckets have a constant time periods.
-        When `ty.List[int]`, each time-bucket has a different time periods as you speficiy.
     ratio_train_test: float
         ratio of splitting dataset into train and test.
         Not used when you give `data_x_test` and `data_y_test`.
@@ -210,15 +189,11 @@ class DataSetConfigArgs:
     dataset_type_backend: str
     dataset_type_charactersitic: str
     
-    is_value_between_timestamp: bool = False
-    
     key_name_array: str = 'array'
     file_name_x: str = 'x.pt'
     file_name_y: str = 'y.pt'
-    
-    time_aggregation_per: int = 100
-    time_slicing_per: ty.Union[int, ty.List[int]] = 100
-    
+        
+    time_aggregation_per: int = 1
     ratio_train_test: float = 0.8
     
     def __post_init__(self):        
@@ -261,7 +236,6 @@ class ApproachConfigArgs:
         Data representation.
         Either of following choices,
         1. 'sample_based': data is sample based.
-        2. 'time_slicing': data is time series data.
     approach_variable_detector: str
         Variable detector.
         Either of following choices,
@@ -274,9 +248,9 @@ class ApproachConfigArgs:
         1. 'cv_selection': Cross Validation Selection.
         2. 'algorithm_one': Algorithm One in the paper.
     """
-    approach_data_representation: str
     approach_variable_detector: str
     approach_interpretable_mmd: str
+    approach_data_representation: str = 'sample_based'    
     
     def __post_init__(self):
         self.approach_data_representation = self.approach_data_representation.lower()
@@ -301,9 +275,7 @@ class CvSelectionConfigArgs:
     
     # lambda search parameter
     approach_regularization_parameter: str = 'param_searching'
-    # search_max_concurrent_job: int = 3
-    # search_n_search_iteration: int = 10
-    # n_regularization_parameter: int = 6
+
     parameter_search_parameter : RegularizationSearchParameters = RegularizationSearchParameters(
         n_search_iteration=10,
         max_concurrent_job=3,
@@ -513,13 +485,14 @@ class BasicVariableSelectionResult:
 class OutputObject:
     configurations: InterfaceConfigArgs
     detection_result_sample_based: ty.Optional[BasicVariableSelectionResult]
-    detection_result_time_slicing: ty.Optional[ty.List[BasicVariableSelectionResult]]
+    # TODO
+    # detection_result_time_slicing: ty.Optional[ty.List[BasicVariableSelectionResult]]
     
     def as_json(self) -> str:
         if isinstance(self.detection_result_sample_based, BasicVariableSelectionResult):
             detection_result = asdict(self.detection_result_sample_based)
-        elif isinstance(self.detection_result_time_slicing, list):
-            detection_result =[asdict(__d) for __d in self.detection_result_time_slicing]
+        # elif isinstance(self.detection_result_time_slicing, list):
+        #     detection_result =[asdict(__d) for __d in self.detection_result_time_slicing]
         else:
             raise ValueError(f'Unknown type case.')
         # end if
