@@ -1,0 +1,117 @@
+[test_quadratic_MmdVariableTrainer]
+    batch_size = 300
+    max_epochs = 9999
+    early_stopping = true
+
+    [test_quadratic_MmdVariableTrainer.wandb_logger]
+        is_log = false
+        project = "mmd-dev"
+        name = "test_quadratic_MmdVariableTrainer"
+        save_dir = "/tmp/wandb"
+    [test_quadratic_MmdVariableTrainer.tensorboard_logger]
+        is_log = true
+        save_dir = "/tmp/tensorboard"
+
+[test_linear_MmdVariableTrainer]
+    batch_size = 300
+    max_epochs = 100
+    early_stopping = true
+
+    [test_linear_MmdVariableTrainer.wandb_logger]
+        is_log = false
+        project = "mmd-dev"
+        name = "test_linear_MmdVariableTrainer"
+        save_dir = "/tmp/wandb"
+
+
+[test_visualize_stability_score_modifications]
+    candidate_regularization_parameter = [
+        [0.1, 0.0],
+        [0.0, 0.1]
+    ]
+
+
+    working_dir_checkpoint_network = "/tmp/mmt-tst-variable-detector/test_visualize_stability_score_modifications"
+
+    n_subsampling = 1
+    n_joblib = 2
+
+    batch_size = 300
+    max_epochs = 5
+    early_stopping = true
+
+    [test_visualize_stability_score_modifications.wandb]
+        is_log = false
+        project = "mmd-dev"
+        name = "test_joblib_StabilitySelectionVariableTrainer"
+        save_dir = "/tmp/wandb"
+
+
+
+[test_joblib_StabilitySelectionVariableTrainer]
+    candidate_regularization_parameter = [[0.1, 0.0]]
+
+    # working_dir_checkpoint_network = "/tmp/mmt-tst-variable-detector/test"
+    # not used anymore.
+
+    n_subsampling = 2
+    n_joblib = 2
+
+    batch_size = 300
+    max_epochs = 10
+    early_stopping = true
+
+    [test_joblib_StabilitySelectionVariableTrainer.wandb]
+        is_log = false
+        project = "mmd-dev"
+        name = "test_joblib_StabilitySelectionVariableTrainer"
+        save_dir = "/tmp/wandb"
+
+
+[test_dask_StabilitySelectionVariableTrainer]
+    candidate_regularization_parameter = [
+        [0.1, 0.0],
+        [0.5, 0.0]
+    ]
+    n_subsampling = 2
+
+    dask_address = "127.0.0.1:8786"
+    working_dir_checkpoint_network = "/mnt/mitsuzaw-global/mmd-tst-variable-detector"
+
+    batch_size = 300
+    max_epochs = 10
+    early_stopping = true
+
+
+[test_search_regularization_min_max]
+    max_epochs = 50
+
+    [test_search_regularization_min_max.wandb_logger]
+        is_log = false
+
+
+[ray_bayesopt_search_regularization_min_max]
+    max_epochs = 600
+
+
+[test_algorithm_one_min_max_param_range]
+    max_epochs = 50
+
+[test_algorithm_one_search_objective_based]
+    max_epochs = 50
+
+[test_sample_selection_based_detector]
+    max_epochs = 50
+    early_stopping = true
+
+    [test_sample_selection_based_detector.tensorboard_logger]
+        is_log = true
+        save_dir = "/tmp/tensorboard/test_sample_selection_based_detector"
+
+[test_sample_selection_dask_joblib]
+    max_epochs = 50
+    early_stopping = true
+
+    [test_sample_selection_dask_joblib.tensorboard_logger]
+        is_log = true
+        save_dir = "/tmp/tensorboard/test_sample_selection_dask_joblib"

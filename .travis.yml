@@ -1,0 +1,25 @@
+dist: jammy
+addons:
+  apt:
+    packages:
+    - openssl
+
+language: python
+python:
+  - "3.9"
+
+before_install:
+  - pip install poetry
+  - pip install urllib3==1.26.6
+  - pip install travis-wait-improved
+
+install:
+  - poetry lock --no-update
+  - poetry install
+
+# command to run tests
+script: 
+  - travis-wait-improved --timeout 60m poetry run pytest tests/
+
+after_success:
+  poetry run coveralls

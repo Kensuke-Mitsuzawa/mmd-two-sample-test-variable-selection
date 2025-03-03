@@ -1,0 +1,64 @@
+[resource_config_args]
+    path_work_dir = '/tmp/mmd_tst_variable_detector/interface-example'
+    dir_name_ml_logger = 'ml_logger'
+    dir_name_model = 'model'
+
+    dask_scheduler_host = 'localhost'
+    dask_scheduler_port = 8786
+    is_use_local_dask_cluster = true
+
+    dask_n_workers = 4
+    dask_threads_per_worker = 4
+
+[data_config_args]
+    data_x_train = '/tmp/mmd_tst_variable_detector/interface-example/data/train'
+    data_y_train = '/tmp/mmd_tst_variable_detector/interface-example/data/train'
+
+    data_x_test = '/tmp/mmd_tst_variable_detector/interface-example/data/test'
+    data_y_test = '/tmp/mmd_tst_variable_detector/interface-example/data/test'
+
+    dataset_type_backend = 'file'  # file or ram
+    dataset_type_charactersitic = 'static'
+
+    key_name_array = 'array'
+    file_name_x = 'x.pt'
+    file_name_y = 'y.pt'
+    
+    time_aggregation_per = 100
+    time_slicing_per = 100
+    
+    ratio_train_test = 0.8
+
+
+[approach_config_args]
+    approach_data_representation = 'sample_based'
+    # detection algorithm, Possible choise: 'interpretable_mmd', 'wasserstein_independence', 'linear_variable_selection'
+    # see docstring in `ApproachConfigArgs` for more.
+    approach_variable_detector = 'interpretable_mmd'
+    approach_interpretable_mmd = 'cv_selection'
+
+
+[detector_algorithm_config_args]
+    [detector_algorithm_config_args.mmd_algorithm_one_args]
+        setting_name = 'config_rapid'
+        max_epoch = 3000
+        batch_size = -1
+
+        n_regularization_parameter = 6
+        search_max_concurrent_job = 3
+        search_n_search_iteration = 10
+
+    [detector_algorithm_config_args.mmd_cv_selection_args]
+        setting_name = 'config_rapid'
+        max_epoch = 3000
+        batch_size = -1
+
+        n_subsampling = 5
+        n_regularization_parameter = 6
+        search_max_concurrent_job = 3
+        search_n_search_iteration = 10
+
+    [detector_algorithm_config_args.linear_variable_selection_args]
+        n_trials = 20
+        n_cv = 5
+        concurrent_limit = 4

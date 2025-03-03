@@ -1,0 +1,34 @@
+version: "3.1"
+
+services:
+  # Docker image for code-exectuion.
+  # TODO change the image name.
+  execution_container:
+    build:
+      context: .
+      dockerfile: docker_files/Dockerfile_dask
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    volumes:
+      - /media/DATA/mitsuzaw/:/media/DATA/mitsuzaw/
+    ports:
+      - 127.0.0.1:8787:8787  # Dask Dashboard
+      - 127.0.0.1:8786:8786  # Dask Scheduler
+    command: ["bash"]
+    user: mitsuzaw
+
+  dev_container:
+    build:
+      context: .
+      dockerfile: docker_files/Dockerfile_dev
+    
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    volumes:
+      - .:/dev-home/
+      - /media/DATA/mitsuzaw/:/media/DATA/mitsuzaw/
+      - ~/.ssh/:/dev/.ssh/:ro      
+    ports:
+      - 127.0.0.1:8888:8888  # Jupyter notebook
+    user: mitsuzaw
+  
