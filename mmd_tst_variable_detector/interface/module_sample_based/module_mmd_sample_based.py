@@ -1,7 +1,6 @@
 from pathlib import Path
 import typing as ty
 import logging
-import timeit
 
 import numpy as np
 import torch
@@ -27,20 +26,21 @@ from ..module_configs import ApproachConfigArgs
 from ..module_configs.algorithm_configs.algorithm_config import (
     CvSelectionConfigArgs,
     AlgorithmOneConfigArgs,
+    BaselineMmdConfigArgs
 )
 from ..interface_config_args import (
     DetectorAlgorithmConfigArgs,
     InterfaceConfigArgs
 )
-
-
 # Algorithm one
 from ...detection_algorithm import detection_algorithm_one, AlgorithmOneResult
+# mmd baseline
+from ...detection_algorithm.baseline_mmd import BaselineMmdResult, baseline_mmd
 
 from ...assessment_helper import default_settings
 
 from .. import data_objects
-from ..module_configs.algorithm_configs import module_mmd_config
+from ..module_configs.algorithm_configs import module_optimisation_config
 
 from ...logger_unit import handler
 
@@ -64,6 +64,11 @@ def get_mmd_config_args(approach_config_args: ApproachConfigArgs,
 
         assert mmd_config_args is not None, 'mmd_algorithm_one_args is not given.'
         assert isinstance(mmd_config_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
+    elif approach_config_args.approach_interpretable_mmd == 'baseline_mmd':
+        mmd_config_args: BaselineMmdConfigArgs = detector_algorithm_config_args.mmd_baseline_args
+
+        assert mmd_config_args is not None, 'mmd_baseline_args is not given.'
+        assert isinstance(mmd_config_args, BaselineMmdConfigArgs), 'mmd_baseline_args is not given.'
     else:
         raise ValueError(f'config_args.approach_config_args.approach_interpretable_mmd: {approach_config_args.approach_interpretable_mmd}')
     # end if
@@ -91,7 +96,7 @@ def get_initial_weights_before_search(dataset: BaseDataset,
     if strategy == 'waterstein':
         raise NotImplementedError('For the moment, I do not confirm validness of this strategy strategy == "waterstein". Stop the execution here.')
         initial_value = weights_initialization(dataset, approach_name='wasserstein', dask_client=dask_client)
-    elif strategy == 'all_one':
+    elif strategy == 'all_one' or strategy == 'one':
         x_dimension_x = dataset.get_dimension_flattened()
         # end if
         
@@ -137,15 +142,33 @@ def __main_run(dataset_train: BaseDataset,
         dataset_train_for_preprocess = dataset_train
     # end if
     
-    # get initial weights.
-    initial_value = get_initial_weights_before_search(dataset=dataset_train_for_preprocess, dask_client=dask_client)
+    mmd_estimator_config = mmd_config_args.mmd_estimator_config
+
+    if isinstance(mmd_estimator_config.ard_weights_initial, str):
+        # get initial weights.
+        initial_value = get_initial_weights_before_search(
+            dataset=dataset_train_for_preprocess, 
+            dask_client=dask_client,
+            strategy=mmd_estimator_config.ard_weights_initial)
+    else:
+        assert isinstance(mmd_estimator_config.ard_weights_initial, torch.Tensor), 'Unexpected type.'
+        initial_value = mmd_estimator_config.ard_weights_initial.numpy()
+    # end if
+    
     # initialization of Kernel instance.
-    # initialization of MMD instance.
+    __length_scale_given = mmd_estimator_config.length_scale if isinstance(mmd_estimator_config.length_scale, torch.Tensor) else None
     kernel = QuadraticKernelGaussianKernel.from_dataset(
         dataset_train_for_preprocess, 
         ard_weights=torch.from_numpy(initial_value),
-        heuristic_operation=mmd_config_args.aggregation_kernel_length_scale)
-    mmd_estimator = QuadraticMmdEstimator(kernel)
+        heuristic_operation=mmd_estimator_config.aggregation_kernel_length_scale,
+        is_dimension_median_heuristic=mmd_estimator_config.is_dimension_median_heuristic,
+        bandwidth=__length_scale_given)
+    # initialization of MMD instance.
+    mmd_estimator = QuadraticMmdEstimator(
+        kernel_obj=kernel,
+        unit_diagonal=mmd_estimator_config.unit_diagonal,
+        biased=mmd_estimator_config.biased,
+        variance_term=mmd_estimator_config.variance_term)
         
     # comment: optuna search exists already in CV intergace.
     # No need to execute it manually.
@@ -204,6 +227,18 @@ def __main_run(dataset_train: BaseDataset,
             test_distance_functions=tuple(mmd_config_args.test_distance_functions),
             n_permutation_test=mmd_config_args.n_permutation_test,
             dask_client=dask_client)
+    elif isinstance(mmd_config_args, BaselineMmdConfigArgs):
+        res = baseline_mmd(
+            mmd_estimator=mmd_estimator,
+            pytorch_trainer_config=pl_param,
+            base_training_parameter=cv_train_param.base_training_parameter,
+            dataset_training=dataset_train,
+            dataset_test=None,
+            path_work_dir=path_dir_model,
+            post_process_handler=post_process_handler,
+            test_distance_functions=tuple(mmd_config_args.test_distance_functions),
+            n_permutation_test=mmd_config_args.n_permutation_test
+        )
     else:
         raise ValueError(f'Unexpected mmd_config_args type: {type(mmd_config_args)}')
     # end if

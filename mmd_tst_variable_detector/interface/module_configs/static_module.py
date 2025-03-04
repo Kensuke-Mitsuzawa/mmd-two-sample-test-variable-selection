@@ -1,5 +1,5 @@
 PossibleDataRepresentation = ('sample_based',)
 PossibleVariableDetector = ('wasserstein_independence', 'linear_variable_selection', 'interpretable_mmd')
-PossibleInterpretableMMD = ('cv_selection', 'algorithm_one', '')
+PossibleInterpretableMMD = ('cv_selection', 'algorithm_one', 'baseline_mmd')
 PossibleDataCharacteristic = ('static', 'sensor_st', 'trajectory_st')
 PossibleDatasetBackend = ('ram', 'file', 'flexible-file')
