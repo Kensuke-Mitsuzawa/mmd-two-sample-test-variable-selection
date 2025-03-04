@@ -177,7 +177,8 @@ class QuadraticMmdEstimator(BaseMmdEstimator):
         :return:
         """
         k_obj: QuadraticKernelMatrixContainer = kernel_matrix_object.kernel_matrix_container
-        m = k_obj.k_xx.shape[0]  # Assumes X, Y are same shape
+        m = k_obj.k_xx.shape[0]
+        n = k_obj.k_yy.shape[0]
 
         # Get the various sums of kernels that we'll use
         # Kts drop the diagonal, but we don't need to compute them explicitly
@@ -213,9 +214,11 @@ class QuadraticMmdEstimator(BaseMmdEstimator):
         k_xy_2_sum = (k_obj.k_xy ** 2).sum()
 
         if self.biased:
-            mmd2 = ((kt_xx_sum + sum_diag_x) / (m * m) + (kt_yy_sum + sum_diag_y) / (m * m) - 2 * k_xy_sum / (m * m))
+            # mmd2 = ((kt_xx_sum + sum_diag_x) / (m * m) + (kt_yy_sum + sum_diag_y) / (m * m) - 2 * k_xy_sum / (m * m))
+            mmd2 = ((kt_xx_sum + sum_diag_x) / (m * m) + (kt_yy_sum + sum_diag_y) / (n * n) - 2 * k_xy_sum / (n * m))            
         else:
-            mmd2 = (kt_xx_sum / (m * (m - 1)) + kt_yy_sum / (m * (m - 1)) - 2 * k_xy_sum / (m * m))
+            # mmd2 = (kt_xx_sum / (m * (m - 1)) + kt_yy_sum / (m * (m - 1)) - 2 * k_xy_sum / (m * m))
+            mmd2 = (kt_xx_sum / (m * (m - 1)) + kt_yy_sum / (n * (n - 1)) - 2 * k_xy_sum / (n * m))
         # end if
 
         if self.is_compute_variance:
@@ -243,7 +246,8 @@ class QuadraticMmdEstimator(BaseMmdEstimator):
 
     def forward(self,
                 x: torch.Tensor,
-                y: torch.Tensor) -> MmdValues:
+                y: torch.Tensor,
+                is_add_kernel_matrix_object: bool = False) -> MmdValues:
         """Computes MMD value.
         Returns:
             MmdValues: named tuple object.
@@ -258,6 +262,10 @@ class QuadraticMmdEstimator(BaseMmdEstimator):
         # end if
 
         computed_values = self.func_mmd_var(v_kernel_matrix_object)
+        if is_add_kernel_matrix_object:
+            computed_values.kernel_matrix_obj = v_kernel_matrix_object
+        # end if
+
         return computed_values
 
 
