@@ -9,6 +9,7 @@ __pycache__/
 logs/
 lightning_logs/
 wandb/
+.venv/
 
 # vscode
 .vscode/
