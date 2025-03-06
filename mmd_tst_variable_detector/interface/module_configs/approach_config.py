@@ -25,6 +25,7 @@ class ApproachConfigArgs:
         Either of following choices,
         1. 'cv_selection': Cross Validation Selection.
         2. 'algorithm_one': Algorithm One in the paper.
+        3. 'baseline_mmd': Baseline MMD.
     """
     approach_variable_detector: str
     approach_interpretable_mmd: str

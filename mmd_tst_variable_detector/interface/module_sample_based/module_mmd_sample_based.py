@@ -128,7 +128,7 @@ def __main_run(dataset_train: BaseDataset,
                path_dir_ml_logger: Path,
                dask_client: ty.Optional[Client] = None,
                seed_root_random: int = 42,
-               ) -> ty.Union[AlgorithmOneResult, CrossValidationTrainedParameter]:
+               ) -> ty.Union[AlgorithmOneResult, CrossValidationTrainedParameter, BaselineMmdResult]:
     mmd_config_args = get_mmd_config_args(
         approach_config_args=training_conf_args.approach_config_args,
         detector_algorithm_config_args=training_conf_args.detector_algorithm_config_args,
@@ -235,10 +235,7 @@ def __main_run(dataset_train: BaseDataset,
             dataset_training=dataset_train,
             dataset_test=None,
             path_work_dir=path_dir_model,
-            post_process_handler=post_process_handler,
-            test_distance_functions=tuple(mmd_config_args.test_distance_functions),
-            n_permutation_test=mmd_config_args.n_permutation_test
-        )
+            post_process_handler=post_process_handler)
     else:
         raise ValueError(f'Unexpected mmd_config_args type: {type(mmd_config_args)}')
     # end if
@@ -250,8 +247,9 @@ def main(config_args: InterfaceConfigArgs,
          dataset_train: BaseDataset,
          dask_client: ty.Optional[Client] = None, 
          dataset_test: ty.Optional[BaseDataset] = None,) -> data_objects.BasicVariableSelectionResult:
-    assert (config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None) or (config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None),\
-        'Either of "mmd_cv_selection_args" or "mmd_algorithm_one_args" must be given.'
+    assert (config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None) or \
+        (config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None) or \
+        (config_args.detector_algorithm_config_args.mmd_baseline_args is not None), 'Either of "mmd_cv_selection_args" or "mmd_algorithm_one_args" must be given.'
     if config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None:
         assert isinstance(config_args.detector_algorithm_config_args.mmd_cv_selection_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
     if config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None and config_args.detector_algorithm_config_args.mmd_algorithm_one_args != '':
@@ -293,9 +291,16 @@ def main(config_args: InterfaceConfigArgs,
         variables = res.stable_s_hat
     elif isinstance(res, AlgorithmOneResult):
         assert res.selected_model is not None
+        assert res.selected_model.interpretable_mmd_train_result is not None
         tensor_weights = res.selected_model.interpretable_mmd_train_result.ard_weights_kernel_k
         weights = tensor_weights.cpu().numpy()
         variables = res.selected_model.selected_variables
+    elif isinstance(res, BaselineMmdResult):
+        assert res.selected_variables is not None
+        assert res.interpretable_mmd_train_result is not None
+        tensor_weights = res.interpretable_mmd_train_result.ard_weights_kernel_k
+        weights = tensor_weights.cpu().numpy()
+        variables = res.selected_variables
     else:
         raise ValueError(f'Unexpected type: {type(res)}')
     # end if

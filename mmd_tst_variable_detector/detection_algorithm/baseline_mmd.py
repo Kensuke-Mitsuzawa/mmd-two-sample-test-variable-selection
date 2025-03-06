@@ -48,10 +48,12 @@ def baseline_mmd(
     pytorch_trainer_config: PytorchLightningDefaultArguments,
     base_training_parameter: InterpretableMmdTrainParameters,
     dataset_training: BaseDataset,
+    dataset_dev: ty.Optional[BaseDataset] = None,
     dataset_test: ty.Optional[BaseDataset] = None,
     path_work_dir: ty.Optional[Path] = None,
+    permutation_test_runner: ty.Optional[PermutationTest] = None,
     post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
-    test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
+    # test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
     n_permutation_test: int = 500
     ) -> BaselineMmdResult:
     """
@@ -60,7 +62,7 @@ def baseline_mmd(
         mmd_estimator=deepcopy(mmd_estimator),
         training_parameter=base_training_parameter,
         dataset_train=dataset_training,
-        dataset_validation=dataset_training)
+        dataset_validation=dataset_training if dataset_dev is None else dataset_dev,)
     pl_trainer_obj = pl.Trainer(**pytorch_trainer_config.as_dict())
     pl_trainer_obj.fit(variable_detector)
     
@@ -69,23 +71,15 @@ def baseline_mmd(
 
     # conducting permutation test
     if dataset_test is not None:
-        permutation_test_obj = PermutationTest(
-            mmd_estimator=mmd_estimator,
-            dataset_train=dataset_training,
-            dataset_test=dataset_test,
-            n_permutation_test=n_permutation_test,
-            distance_functions=test_distance_functions,
-            variable_detected=variable_detected)
-        p_value, stats_permutation_test = permutation_test_obj.run_test(
-            dataset=dataset_test,
-            variable_detected=variable_detected,
-            distance_functions=test_distance_functions)
+        dataset_test_selected = dataset_test.get_selected_variables_dataset(tuple(variable_detected))
+        if permutation_test_runner is None:
+            permutation_test_obj = PermutationTest(n_permutation_test=n_permutation_test,)
+        else:
+            permutation_test_obj = permutation_test_runner
+        # end
+        p_value, stats_permutation_test = permutation_test_obj.run_test(dataset=dataset_test_selected)
     else:
-        p_value, stats_permutation_test = None
-    # end if
-    
-    if path_work_dir is None:
-        shutil.rmtree(path_work_dir.as_posix())
+        p_value, stats_permutation_test = None, None
     # end if
     
     if post_process_handler is not None:

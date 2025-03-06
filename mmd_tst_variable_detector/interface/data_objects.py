@@ -14,6 +14,7 @@ from ..logger_unit import handler
 from ..baselines.regression_based_variable_selection.tst_based_regression_tuner import TstBasedRegressionTunerResult
 from ..detection_algorithm.cross_validation_detector.cross_validation_detector import CrossValidationTrainedParameter
 from ..detection_algorithm.detection_algorithm_one import AlgorithmOneResult
+from ..detection_algorithm.baseline_mmd import BaselineMmdResult
 
 from .interface_config_args import InterfaceConfigArgs
 
@@ -40,7 +41,7 @@ class BasicVariableSelectionResult:
     weights: ty.Union[ty.List[int], np.ndarray]
     variables: ty.List[int]
     p_value: float
-    verbose_field: ty.Optional[ty.Union[TstBasedRegressionTunerResult, CrossValidationTrainedParameter, AlgorithmOneResult]] = None
+    verbose_field: ty.Optional[ty.Union[TstBasedRegressionTunerResult, BaselineMmdResult, CrossValidationTrainedParameter, AlgorithmOneResult]] = None
     n_sample_training: ty.Optional[int] = None
     n_sample_test: ty.Optional[int] = None
     

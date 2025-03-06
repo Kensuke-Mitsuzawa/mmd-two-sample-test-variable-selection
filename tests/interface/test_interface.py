@@ -25,7 +25,8 @@ from mmd_tst_variable_detector.interface.module_configs import (
     DataSetConfigArgs,
     DistributedConfigArgs,
     CvSelectionConfigArgs,
-    LinearVariableSelectionConfigArgs
+    LinearVariableSelectionConfigArgs,
+    BaselineMmdConfigArgs
 )
 from mmd_tst_variable_detector.interface.interface_config_args import DetectorAlgorithmConfigArgs
 from mmd_tst_variable_detector.assessment_helper.data_generator import sampling_from_distribution
@@ -139,7 +140,7 @@ def test_ram_backend_static_dataset_sample_based_linear_variable_selection(resou
 
 
 
-def test_ram_backend_static_dataset_sample_based_interpretable_mmd(resource_path_root: Path) -> None:
+def test_ram_backend_static_dataset_sample_based_interpretable_mmd_cv(resource_path_root: Path) -> None:
     test_approach_variable_detector = 'interpretable_mmd'
     
     __sample_x, __sample_y, ground_truth = sampling_from_distribution(
@@ -193,6 +194,60 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd(resource_path
     logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
     # getting result
     shutil.rmtree(config_args.resource_config_args.path_work_dir)
+
+
+def test_ram_backend_static_dataset_sample_based_interpretable_mmd_baseline_mmd(resource_path_root: Path) -> None:
+    test_approach_variable_detector = 'interpretable_mmd'
+    
+    __sample_x, __sample_y, ground_truth = sampling_from_distribution(
+        n_sample=10,
+        dimension_size=5,
+        mixture_rate=0.1,
+        distribution_conf_p={'type': 'gaussian', 'mu': 0.0, 'sigma': 1.0},
+        distribution_conf_q={'type': 'gaussian', 'mu': 5.0, 'sigma': 1.0}
+    )
+    
+    sample_x, sample_y = torch.from_numpy(__sample_x), torch.from_numpy(__sample_y)
+    
+    path_work_dir = Path(mkdtemp())
+    path_work_dir.mkdir(parents=True, exist_ok=True)
+
+    config_args = InterfaceConfigArgs(
+        resource_config_args=ResourceConfigArgs(
+            path_work_dir=path_work_dir,
+            dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
+        ),
+        approach_config_args=ApproachConfigArgs(
+            approach_data_representation='sample_based',
+            approach_variable_detector=test_approach_variable_detector,
+            approach_interpretable_mmd='baseline_mmd'),
+        data_config_args=DataSetConfigArgs(
+            data_x_train=sample_x,
+            data_y_train=sample_y,
+            data_x_test=None,
+            data_y_test=None,
+            dataset_type_backend='ram',
+            dataset_type_charactersitic='static',),
+        detector_algorithm_config_args=DetectorAlgorithmConfigArgs(
+            mmd_baseline_args=BaselineMmdConfigArgs(
+                max_epoch=50,
+            )
+        )
+    )
+
+    # Create the interface
+    interface_instance = interface.Interface(config_args=config_args)
+    interface_instance.fit()
+    res_object = interface_instance.get_result()
+    
+    assert isinstance(res_object.detection_result_sample_based, BasicVariableSelectionResult)
+    assert isinstance(res_object.detection_result_sample_based.weights, np.ndarray)
+    assert isinstance(res_object.detection_result_sample_based.variables, list)
+    assert isinstance(res_object.detection_result_sample_based.p_value, float)
+    logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
+    # getting result
+    shutil.rmtree(path_work_dir)
+
 
 
 def test_ram_backend_static_dataset_sample_based_wasserstein_independence(resource_path_root: Path) -> None:

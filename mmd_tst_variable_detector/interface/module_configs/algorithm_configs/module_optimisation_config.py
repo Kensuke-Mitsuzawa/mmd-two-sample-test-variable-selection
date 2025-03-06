@@ -33,7 +33,8 @@ from .. import (
     ApproachConfigArgs,
     AlgorithmOneConfigArgs,
     CvSelectionConfigArgs,
-    ResourceConfigArgs
+    ResourceConfigArgs,
+    BaselineMmdConfigArgs
 )
 
 from ....logger_unit import handler
@@ -47,7 +48,7 @@ class MmdOptimisationConfigTemplate(ABC):
     def get_configs(self,
                     path_work_dir: Path,
                     dask_scheduler_address: ty.Optional[str],
-                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs],
+                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
                     resource_config_args: ResourceConfigArgs
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         raise NotImplementedError('This method must be implemented in the derived class.')
@@ -58,7 +59,7 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
     def get_configs(self,
                     path_work_dir: Path,
                     dask_scheduler_address: ty.Optional[str],
-                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs],
+                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
                     resource_config_args: ResourceConfigArgs
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         """The training configuration that I used in study-71.
@@ -127,7 +128,10 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
             computation_backend = 'dask')
         
         # NOTE: I forcely update the search strategy. It's always fixed to 'heuristic'.
-        algorithm_config.parameter_search_parameter.search_strategy = 'heuristic'
+        if isinstance(algorithm_config, BaselineMmdConfigArgs):
+            pass
+        else:
+            algorithm_config.parameter_search_parameter.search_strategy = 'heuristic'
 
         return training_parameter, pl_trainer_config
 
@@ -224,7 +228,7 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
     def get_configs(self,
                     path_work_dir: Path,
                     dask_scheduler_address: ty.Optional[str],
-                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs],
+                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
                     resource_config_args: ResourceConfigArgs
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         """The training configuration that I used in study-71.
@@ -265,6 +269,7 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
             dataloader_persistent_workers=algorithm_config.dataloader_persistent_workers,
             limit_steps_early_stop_negative_mmd=3000)  # comment: 3000 for tmp setting
         
+        assert resource_config_args.dask_config_detection is not None, 'resource_config_args.dask_config_detection is not None.'
         if isinstance(algorithm_config, CvSelectionConfigArgs):
             algorithm_parameter = CrossValidationAlgorithmParameter(
                 candidate_regularization_parameter='auto',
@@ -298,6 +303,14 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
                 base_training_parameter,
                 distributed_parameter,
                 computation_backend=resource_config_args.dask_config_detection.distributed_mode)
+        elif isinstance(algorithm_config, BaselineMmdConfigArgs):
+            # I use the same configuration as the CV-selection.
+            distributed_parameter = DistributedComputingParameter(dask_scheduler_address=dask_scheduler_address)
+            training_parameter = CrossValidationTrainParameters(
+                algorithm_parameter=None,
+                base_training_parameter=base_training_parameter,
+                distributed_parameter=distributed_parameter,
+                computation_backend=resource_config_args.dask_config_detection.distributed_mode)            
         else:
             raise ValueError(f'Invalid type of algorithm_config: {type(algorithm_config)}')
         # end if

@@ -229,8 +229,18 @@ def __get_mmd_estimator(interpretable_mmd_result,
             # end if
         else:
             raise ValueError()
+    elif interpretable_mmd_result.__class__.__name__ == "BaselineMmdResult":
+        _interpretable_mmd_train_result = interpretable_mmd_result.interpretable_mmd_train_result
+        assert isinstance(_interpretable_mmd_train_result, InterpretableMmdTrainResult)
+        # output from baseline
+        # trained_parameters = interpretable_mmd_trainer_done.get_trained_variables()
+        seq_variables = detect_variables(_interpretable_mmd_train_result.ard_weights_kernel_k)
+        # ard_weights = interpretable_mmd_result.ard_weights_kernel_k.numpy()
+        mmd_estimator_parameters = _interpretable_mmd_train_result.mmd_estimator
+        mmd_estimator_arguments = _interpretable_mmd_train_result.mmd_estimator_hyperparameters
+        is_mmd_hard_possible = False
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f'The given type is not implemented yet: {type(interpretable_mmd_result)}')
     # end if
 
     return ObtainedMmdEstimatorSet(is_mmd_hard_possible, seq_variables, mmd_estimator_parameters, mmd_estimator_arguments)
