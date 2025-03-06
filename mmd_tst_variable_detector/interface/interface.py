@@ -152,8 +152,8 @@ class Interface(object):
         When the input is a directory, run rglob and listing up all files.
         """
         if self.config_args.data_config_args.dataset_type_backend == 'ram':
-            assert isinstance(data_x, torch.Tensor)
-            assert isinstance(data_y, torch.Tensor)            
+            assert isinstance(data_x, torch.Tensor), f'data_x must be torch.Tensor object. Are you giving in str'
+            assert isinstance(data_y, torch.Tensor), f'data_y must be torch.Tensor object. Are you giving in str'            
             return data_x, data_y
         elif self.config_args.data_config_args.dataset_type_backend == 'flexible-file':
             # check if the key exists in the file.

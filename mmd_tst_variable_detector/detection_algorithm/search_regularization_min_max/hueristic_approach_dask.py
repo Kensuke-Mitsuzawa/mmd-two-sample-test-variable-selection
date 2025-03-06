@@ -12,6 +12,7 @@ import pytorch_lightning as pl
 
 from ...mmd_estimator import BaseMmdEstimator
 from ...datasets.base import BaseDataset
+from ...datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
 from ..interpretable_mmd_detector import (
     InterpretableMmdDetector,
     RegularizationParameter,
@@ -294,6 +295,12 @@ def __func_dask_run(count_trainer_obj: CountedTrainer,
                     pytorch_trainer_config: PytorchLightningDefaultArguments,
                     variable_detection_approach: str = "hist_based"
                     ) -> ty.Tuple[int, ty.Optional[InterpretableMmdTrainResult], ty.List[int]]:
+
+    if isinstance(count_trainer_obj.trainer.dataset_train, FileBackendOneTimeLoadStaticDataset):
+        count_trainer_obj.trainer.dataset_train = count_trainer_obj.trainer.dataset_train.generate_dataset_on_ram()
+    if isinstance(count_trainer_obj.trainer.dataset_validation, FileBackendOneTimeLoadStaticDataset):
+        count_trainer_obj.trainer.dataset_validation = count_trainer_obj.trainer.dataset_validation.generate_dataset_on_ram()
+    # end if
 
     try:
         trainer_pl = pl.Trainer(**asdict(pytorch_trainer_config))

@@ -32,6 +32,7 @@ from .commons import (
 from ..exceptions import OptimizationException
 from ..datasets.base import BaseDataset
 from ..kernels.base import BaseKernel
+from ..datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
 
 from ..logger_unit import handler
 
@@ -118,6 +119,12 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
             dataset_train, training_parameter, is_shuffle_dataset = tune_dataset_batch_size(
                 dataset_train, training_parameter, mmd_estimator)
             logger.info("End tuning batch size.")
+        # end if
+
+        if isinstance(dataset_train, FileBackendOneTimeLoadStaticDataset):
+            dataset_train = dataset_train.generate_dataset_on_ram()
+        if isinstance(dataset_validation, FileBackendOneTimeLoadStaticDataset):
+            dataset_validation = dataset_validation.generate_dataset_on_ram()
         # end if
 
         if training_parameter.is_use_log == -1:
@@ -417,6 +424,11 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
             # end if
             self.training_step_outputs.append(__values)
             return __values
+        
+    def on_train_epoch_start(self) -> None:
+        if isinstance(self.dataset_train, FileBackendOneTimeLoadStaticDataset):
+            self.dataset_train = self.dataset_train.generate_dataset_on_ram()
+        # end if
 
     def on_train_epoch_end(self) -> None:
         # sometimes, self.training_step_outputs becomes a blank list.
@@ -494,6 +506,11 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
         # end if
         self.validation_step_outputs.append(__values)
         return __values
+    
+    def on_validation_epoch_start(self) -> None:
+        if isinstance(self.dataset_validation, FileBackendOneTimeLoadStaticDataset):
+            self.dataset_validation = self.dataset_validation.generate_dataset_on_ram()
+        # end if    
 
     def on_validation_epoch_end(self):
         # sometimes, self.training_step_outputs becomes a blank list.
