@@ -25,6 +25,7 @@ from mmd_tst_variable_detector import (
     DetectorAlgorithmConfigArgs,
     CvSelectionConfigArgs,
     BasicVariableSelectionResult,
+    OutputObject,
     DistributedConfigArgs,
     RegularizationSearchParameters
 )
@@ -342,7 +343,7 @@ def main(path_toml_config: Path):
         __interface = Interface(interface_args)
         __interface.fit()
         result_obj = __interface.get_result(output_mode='verbose')
-        assert isinstance(result_obj, BasicVariableSelectionResult)
+        assert isinstance(result_obj, OutputObject)
         
         detection_obj_json: str = result_obj.as_json()
         

@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.utils.data
+from pathlib import Path
 
 from distributed import LocalCluster
 
@@ -14,9 +15,9 @@ from mmd_tst_variable_detector import (
     InterpretableMmdTrainParameters,
     InterpretableMmdDetector,
     detect_variables,
-    # training helper
-    DefaultEarlyStoppingRule,
+    PytorchLightningDefaultArguments
 )
+from mmd_tst_variable_detector.detection_algorithm.early_stoppings import ConvergenceEarlyStop
 from mmd_tst_variable_detector.assessment_helper.default_settings import lr_scheduler
 
 import logzero
@@ -64,11 +65,13 @@ def example_interpretable_mmd(max_epochs: int):
 
     mmd_estimator = QuadraticMmdEstimator(kernel_obj=kernel_function)
 
-    pl_trainer = pytorch_lightning.Trainer(max_epochs=max_epochs,
-                                           callbacks=DefaultEarlyStoppingRule,
-                                           enable_checkpointing=False,
-                                           enable_model_summary=False,
-                                           enable_progress_bar=True)
+    pl_trainer_config = PytorchLightningDefaultArguments(max_epochs=max_epochs,
+                                                  callbacks=ConvergenceEarlyStop(),
+                                                  enable_checkpointing=False,
+                                                  enable_model_summary=False,
+                                                  enable_progress_bar=True,
+                                                  default_root_dir=Path("/tmp/",))
+    pl_trainer = pytorch_lightning.Trainer(**pl_trainer_config.as_dict())
     
     training_parameter = InterpretableMmdTrainParameters(
         regularization_parameter=RegularizationParameter(reg_parameter_l1, reg_parameter_l2),

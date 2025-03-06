@@ -4,8 +4,6 @@ import torch.utils.data
 
 from distributed import LocalCluster
 
-import pytorch_lightning
-
 from mmd_tst_variable_detector import (
     QuadraticKernelGaussianKernel,
     QuadraticMmdEstimator,
@@ -18,8 +16,10 @@ from mmd_tst_variable_detector import (
     DistributedComputingParameter,
     CrossValidationTrainParameters,
     # training helper
+    PytorchLightningDefaultArguments
 )
-from mmd_tst_variable_detector.assessment_helper.default_settings import lr_scheduler, DefaultEarlyStoppingRule
+from mmd_tst_variable_detector.detection_algorithm.early_stoppings import ConvergenceEarlyStop
+from mmd_tst_variable_detector.assessment_helper.default_settings import lr_scheduler
 
 import logzero
 logger = logzero.logger
@@ -103,20 +103,23 @@ def example_cv_detector(n_cv_parameter: int = 2, max_epochs: int = 10):
         computation_backend='dask'
     )
 
-    pl_trainer = pytorch_lightning.Trainer(max_epochs=max_epochs,
-                                           callbacks=DefaultEarlyStoppingRule,
-                                           enable_checkpointing=False,
-                                           enable_model_summary=False,
-                                           enable_progress_bar=True)
+    pytorch_trainer_config = PytorchLightningDefaultArguments(
+        max_epochs=max_epochs,
+        callbacks=ConvergenceEarlyStop(ignore_epochs=1000),
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        enable_progress_bar=True,
+        accelerator='auto')
 
     cv_detector = CrossValidationInterpretableVariableDetector(
         training_parameter=cv_training_parameter,
-        trainer_lightning=pl_trainer,
-        estimator=mmd_estimator,
+        pytorch_trainer_config=pytorch_trainer_config,
+        estimator=mmd_estimator
+    )
+    cv_result = cv_detector.run_cv_detection(
         training_dataset=dataset_train,
         validation_dataset=dataset_dev
     )
-    cv_result = cv_detector.run_cv_detection()
 
     logger.info(f'Detecetd variables -> {cv_result.stable_s_hat}')
     logger.info(f'Weights array -> {cv_result.array_s_hat}')
