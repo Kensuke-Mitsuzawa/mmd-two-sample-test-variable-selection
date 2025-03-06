@@ -92,7 +92,7 @@ def get_initial_weights_before_search(dataset: BaseDataset,
     A core of this experiment. It initializes a set of weights before the Optuna Parameter search.
     I want to know if this initial search contributes to speed performance/epoch size while keeping the detection quality.
     """
-    assert strategy in ['all_one', 'wasserstein'], f'Unexpected strategy: {strategy}'
+    assert strategy in ['all_one', 'one', 'wasserstein'], f'Unexpected strategy: {strategy}'
     if strategy == 'waterstein':
         raise NotImplementedError('For the moment, I do not confirm validness of this strategy strategy == "waterstein". Stop the execution here.')
         initial_value = weights_initialization(dataset, approach_name='wasserstein', dask_client=dask_client)
