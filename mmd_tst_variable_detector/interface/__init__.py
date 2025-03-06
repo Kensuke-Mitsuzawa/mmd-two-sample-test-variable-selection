@@ -4,7 +4,10 @@ from .data_objects import (
     BasicVariableSelectionResult,
 )
 from .module_configs import *
-from .interface_config_args import InterfaceConfigArgs
+from .interface_config_args import (
+    InterfaceConfigArgs,
+    DetectorAlgorithmConfigArgs
+)
 from .data_objects import (
     BasicVariableSelectionResult,
     OutputObject
