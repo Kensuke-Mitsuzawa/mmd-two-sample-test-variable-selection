@@ -157,6 +157,10 @@ class CvSelectionConfig:
 class ComputationalResourceConfig:
     train_accelerator: str = 'cpu'
 
+    distributed_mode: str = 'single'
+    dask_n_workers: int = 8
+    dask_threads_per_worker: int = 1
+
     def __post_init__(self):
         assert self.train_accelerator in ['cpu', 'cuda']
 
@@ -311,8 +315,11 @@ def main(path_toml_config: Path):
     detection_approaches = config_obj.detection_approaches
 
     distributed_config = DistributedConfigArgs(
-        distributed_mode='single',
-        dask_scheduler_host=None)
+        distributed_mode=config_obj.computational_resource.distributed_mode,
+        dask_scheduler_host=None,
+        dask_n_workers=config_obj.computational_resource.dask_n_workers,
+        dask_threads_per_worker=config_obj.computational_resource.dask_threads_per_worker
+        )
 
     parameter_search_parameter = RegularizationSearchParameters(
         n_regularization_parameter=config_obj.cv_selection.n_regularization_parameter,

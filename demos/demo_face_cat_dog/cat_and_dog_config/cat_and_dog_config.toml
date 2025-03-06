@@ -1,4 +1,4 @@
-detection_approaches = ["interpretable_mmd"]
+detection_approaches = ["interpretable_mmd", "wasserstein_independence"]
 # ram is the faster. flexible-file is slower, but less RAM-memory burden.
 dataset_type_backend = "ram"
 
@@ -6,6 +6,7 @@ dataset_type_backend = "ram"
     file_name_sqlite3 = "exp_result.sqlite3"
     name_experiment_db = "experiment.json"
 
+    # Rewriting the path here!
     path_experiment_root = "/home/kmitsuzawa/DATA/mitsuzaw/eurecom/mmd-two-sample-test-variable-selection/cat_and_dogs"
     dir_name_data = "data"
     dir_models = "models"
@@ -15,6 +16,9 @@ dataset_type_backend = "ram"
     # cpu or cuda
     train_accelerator = "cuda"
 
+    distributed_mode = "single"
+    dask_n_workers = 24
+    dask_threads_per_worker = 1
 
 [data_setting]
     target_image_size = [32, 32]
