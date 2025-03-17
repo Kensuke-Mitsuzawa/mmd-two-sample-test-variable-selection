@@ -37,4 +37,6 @@ class ApproachConfigArgs:
         self.approach_interpretable_mmd = self.approach_interpretable_mmd.lower()
         assert self.approach_data_representation in PossibleDataRepresentation, f'{self.approach_data_representation} is not supported. Possible choise -> {PossibleDataRepresentation}'
         assert self.approach_variable_detector in PossibleVariableDetector, f'{self.approach_variable_detector} is not supported. Possible choise -> {PossibleVariableDetector}'
-        assert self.approach_interpretable_mmd in PossibleInterpretableMMD, f'{self.approach_interpretable_mmd} is not supported. Possible choise -> {PossibleInterpretableMMD}'
+        if self.approach_variable_detector == 'interpretable_mmd':
+            assert self.approach_interpretable_mmd in PossibleInterpretableMMD, f'{self.approach_interpretable_mmd} is not supported. Possible choise -> {PossibleInterpretableMMD}'
+        # end if

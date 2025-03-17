@@ -56,6 +56,12 @@ class MmdOptimisationConfigTemplate(ABC):
 
 
 class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
+    def __init__(self,
+                 is_show_progress_bar: bool = True
+                 ) -> None:
+        super().__init__()
+        self.is_show_progress_bar = is_show_progress_bar
+
     def get_configs(self,
                     path_work_dir: Path,
                     dask_scheduler_address: ty.Optional[str],
@@ -86,7 +92,7 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
             max_epochs=algorithm_config.max_epoch,
             callbacks=[early_stopper],
             enable_checkpointing=False,
-            enable_progress_bar=True,
+            enable_progress_bar=self.is_show_progress_bar,
             enable_model_summary=False,
             logger=None,
             default_root_dir=path_work_dir
