@@ -41,21 +41,34 @@ logger.addHandler(handler)
 
 @dataclass
 class DetectorAlgorithmConfigArgs:
-    mmd_cv_selection_args: ty.Optional[ty.Union[str, CvSelectionConfigArgs]] = None
-    mmd_algorithm_one_args: ty.Optional[ty.Union[str, AlgorithmOneConfigArgs]] = None
-    mmd_baseline_args: ty.Optional[ty.Union[str, BaselineMmdConfigArgs]] = None
-    linear_variable_selection_args: ty.Optional[ty.Union[str, LinearVariableSelectionConfigArgs]] = None
+    mmd_cv_selection_args: ty.Optional[ty.Union[str, ty.Dict, CvSelectionConfigArgs]] = None
+    mmd_algorithm_one_args: ty.Optional[ty.Union[str, ty.Dict, AlgorithmOneConfigArgs]] = None
+    mmd_baseline_args: ty.Optional[ty.Union[str, ty.Dict, BaselineMmdConfigArgs]] = None
+    linear_variable_selection_args: ty.Optional[ty.Union[str, ty.Dict, LinearVariableSelectionConfigArgs]] = None
     mmd_optimiser_configs: MmdOptimisationConfigTemplate = ConfigTPamiDraft()
 
     def __post_init__(self):
         if self.mmd_baseline_args == '':
             self.mmd_baseline_args = None
+        elif isinstance(self.mmd_baseline_args, dict):
+            self.mmd_baseline_args = BaselineMmdConfigArgs(**self.mmd_baseline_args)
+        # end if
+
         if self.mmd_cv_selection_args == '':
             self.mmd_cv_selection_args = None
+        elif isinstance(self.mmd_cv_selection_args, dict):
+            self.mmd_cv_selection_args = CvSelectionConfigArgs(**self.mmd_cv_selection_args)
+        # end if
         if self.mmd_algorithm_one_args == '':
-            self.mmd_algorithm_one_args = None 
+            self.mmd_algorithm_one_args = None
+        elif isinstance(self.mmd_algorithm_one_args, dict):
+            self.mmd_algorithm_one_args = AlgorithmOneConfigArgs(**self.mmd_algorithm_one_args)
+        # end if
+        #  
         if self.linear_variable_selection_args == '':
             self.linear_variable_selection_args = None
+        elif isinstance(self.linear_variable_selection_args, dict):
+            self.linear_variable_selection_args = LinearVariableSelectionConfigArgs(**self.linear_variable_selection_args)
         # end if
 
 
