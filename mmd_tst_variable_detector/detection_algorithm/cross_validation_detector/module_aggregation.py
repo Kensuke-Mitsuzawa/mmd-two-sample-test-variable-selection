@@ -33,7 +33,12 @@ class PostAggregatorMmdAGG(object):
     def __init__(self,
                  training_parameter: CrossValidationTrainParameters,
                  post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
-                 cv_detection_experiment_name: ty.Optional[str] = None) -> None:
+                 cv_detection_experiment_name: ty.Optional[str] = None,
+                 minimum_guard_test_power_val: float = 0.0001) -> None:
+        """
+        Args:
+            minimum_guard_test_power_val: A minimum value of test power. If the test power (validation) is <0.0, the value is replaced with this value.
+        """
         self.training_parameter = training_parameter
         self.post_process_handler = post_process_handler
         
@@ -42,9 +47,14 @@ class PostAggregatorMmdAGG(object):
         else:
             self.cv_detection_experiment_name = cv_detection_experiment_name
         # end if
+
+        self.minimum_guard_test_power_val = minimum_guard_test_power_val
         
-    @staticmethod
-    def __weight_score(array_value: torch.Tensor, weighting_mode: str, p_value: float, test_power_val: float) -> torch.Tensor:
+    def __weight_score(self, array_value: torch.Tensor, weighting_mode: str, p_value: float, test_power_val: float) -> torch.Tensor:
+        if test_power_val < 0.0:
+            test_power_val = self.minimum_guard_test_power_val
+        # end if
+
         if weighting_mode == 'plane':
             return array_value
         elif weighting_mode == 'p_value':
