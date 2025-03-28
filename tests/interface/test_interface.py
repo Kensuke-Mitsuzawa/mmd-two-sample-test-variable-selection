@@ -138,8 +138,7 @@ def test_ram_backend_static_dataset_sample_based_linear_variable_selection(resou
     # getting result
     assert isinstance(config_args.resource_config_args.path_work_dir, Path)
     if config_args.resource_config_args.path_work_dir.exists():
-        config_args.resource_config_args.path_work_dir.rmdir()
-
+        shutil.rmtree(config_args.resource_config_args.path_work_dir)
 
 
 def test_ram_backend_static_dataset_sample_based_interpretable_mmd_cv(resource_path_root: Path) -> None:

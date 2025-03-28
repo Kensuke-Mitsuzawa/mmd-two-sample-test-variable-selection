@@ -50,7 +50,6 @@
 
 [detector_algorithm_config_args]
     [detector_algorithm_config_args.mmd_cv_selection_args]
-        setting_name = 'config_rapid'
         max_epoch = 9999
         batch_size = -1
             [detector_algorithm_config_args.mmd_cv_selection_args.parameter_search_parameter]
@@ -59,7 +58,6 @@
                 search_n_search_iteration = 10
 
     [detector_algorithm_config_args.mmd_algorithm_one_args]
-        setting_name = 'config_rapid'
         max_epoch = 9999
         batch_size = -1
             [detector_algorithm_config_args.mmd_algorithm_one_args.parameter_search_parameter]

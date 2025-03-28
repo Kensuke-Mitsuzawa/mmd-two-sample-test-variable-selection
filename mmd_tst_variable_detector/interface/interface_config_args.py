@@ -93,9 +93,4 @@ class InterfaceConfigArgs:
     detector_algorithm_config_args: DetectorAlgorithmConfigArgs
     
     def __post_init__(self):
-        # reset the distributed backend.
-        if isinstance(self.detector_algorithm_config_args.mmd_algorithm_one_args, AlgorithmOneConfigArgs):
-            self.detector_algorithm_config_args.mmd_algorithm_one_args.parameter_search_parameter.backend = self.resource_config_args.dask_config_detection.distributed_mode
-        if isinstance(self.detector_algorithm_config_args.mmd_cv_selection_args, CvSelectionConfigArgs):
-            self.detector_algorithm_config_args.mmd_cv_selection_args.parameter_search_parameter.backend = self.resource_config_args.dask_config_detection.distributed_mode
-        # end if
+        pass
