@@ -47,9 +47,6 @@ class ResourceConfigArgs:
     
     # Distributed backend configurations    
     distributed_config_detection: DistributedConfigArgs = DistributedConfigArgs()
-
-    dask_config_detection: ty.Optional[DistributedConfigArgs] = None
-
     
     def __post_init__(self):        
         if self.path_work_dir is None:

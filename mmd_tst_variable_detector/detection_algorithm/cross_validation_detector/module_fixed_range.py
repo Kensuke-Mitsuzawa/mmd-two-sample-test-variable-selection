@@ -53,7 +53,9 @@ class SubModuleCrossValidationFixedRange(object):
                  post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
                  resume_checkpoint_saver : ty.Optional[CheckPointSaverStabilitySelection] = None,
                  cv_detection_experiment_name: ty.Optional[str] = None,
-                 seed_root_random: int = 42) -> None:
+                 seed_root_random: int = 42,
+                 dask_client: ty.Optional[Client] = None) -> None:
+        self.dask_client = dask_client
         # -------------------------------------------------------
         # attributes
         self.training_dataset: BaseDataset
@@ -90,40 +92,40 @@ class SubModuleCrossValidationFixedRange(object):
 
         return sub_id_tuple, already_trained_sub_learners
         
-    def __distributed_joblib_backend(self,
-                                     seq_task_arguments: ty.List[RequestDistributedFunction]
-                                     ) -> ty.List[SubLearnerTrainingResult]:
-        """
+    # def __distributed_joblib_backend(self,
+    #                                  seq_task_arguments: ty.List[RequestDistributedFunction]
+    #                                  ) -> ty.List[SubLearnerTrainingResult]:
+    #     """
 
-        :return:
-        """
-        # seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
+    #     :return:
+    #     """
+    #     # seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
 
-        batch_n = self.training_parameter.distributed_parameter.job_batch_size
-        seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
+    #     batch_n = self.training_parameter.distributed_parameter.job_batch_size
+    #     seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
 
-        seq_results = []
-        for on_job_batch in seq_batch:
-            __seq_results = joblib.Parallel(
-                n_jobs=self.training_parameter.distributed_parameter.n_joblib,
-                backend=self.training_parameter.distributed_parameter.joblib_backend)(
-                joblib.delayed(dask_worker_script)(args) for args in on_job_batch)
-            seq_results += __seq_results
+    #     seq_results = []
+    #     for on_job_batch in seq_batch:
+    #         __seq_results = joblib.Parallel(
+    #             n_jobs=self.training_parameter.distributed_parameter.n_joblib,
+    #             backend=self.training_parameter.distributed_parameter.joblib_backend)(
+    #             joblib.delayed(dask_worker_script)(args) for args in on_job_batch)
+    #         seq_results += __seq_results
 
-            # save opt results
-            if self.resume_checkpoint_saver is not None:
-                for sub_learner_result in __seq_results:
-                    assert isinstance(sub_learner_result, SubLearnerTrainingResult)
-                    self.resume_checkpoint_saver.save_checkpoint(sub_learner_result)
-            # end if
+    #         # save opt results
+    #         if self.resume_checkpoint_saver is not None:
+    #             for sub_learner_result in __seq_results:
+    #                 assert isinstance(sub_learner_result, SubLearnerTrainingResult)
+    #                 self.resume_checkpoint_saver.save_checkpoint(sub_learner_result)
+    #         # end if
 
-            if self.post_process_handler is not None:
-                logger.debug('logging post-process results...')
-                self.__log_post_process(__seq_results)  # type: ignore
-                logger.debug('logging Done')
-            # end if
+    #         if self.post_process_handler is not None:
+    #             logger.debug('logging post-process results...')
+    #             self.__log_post_process(__seq_results)  # type: ignore
+    #             logger.debug('logging Done')
+    #         # end if
             
-        return seq_results
+    #     return seq_results
     
     def __log_post_process(self, seq_results_one_batch: ty.List[SubLearnerTrainingResult]):
         """Private API. Logging post-process results."""
@@ -176,7 +178,10 @@ class SubModuleCrossValidationFixedRange(object):
         batch_n = self.training_parameter.distributed_parameter.job_batch_size
         seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
 
-        client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
+        # client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
+        client = self.dask_client
+        assert client is not None, 'Dask client is not given.'
+        assert isinstance(client, Client), 'Dask client is not given.'
         seq_results = []
         for on_job_batch in seq_batch:
             task_queue = client.map(dask_worker_script, on_job_batch)
@@ -217,14 +222,19 @@ class SubModuleCrossValidationFixedRange(object):
         a list of `SubLearnerTrainingResult`
         """
 
-        if self.training_parameter.computation_backend == 'single':
+        # if self.training_parameter.computation_backend == 'single':
+        #     trained_function_return_done += self.__non_distributed_single_backend(seq_job_function_parameter)
+        # elif self.training_parameter.computation_backend == 'joblib':
+        #     trained_function_return_done += self.__distributed_joblib_backend(seq_job_function_parameter)
+        # elif self.training_parameter.computation_backend == 'dask':
+        #     trained_function_return_done += self.__distributed_dask_backend(seq_job_function_parameter)
+        # else:
+        #     raise NotImplementedError(f'No backend named {self.training_parameter.computation_backend}')
+        # # end if
+        if self.dask_client is None:
             trained_function_return_done += self.__non_distributed_single_backend(seq_job_function_parameter)
-        elif self.training_parameter.computation_backend == 'joblib':
-            trained_function_return_done += self.__distributed_joblib_backend(seq_job_function_parameter)
-        elif self.training_parameter.computation_backend == 'dask':
-            trained_function_return_done += self.__distributed_dask_backend(seq_job_function_parameter)
         else:
-            raise NotImplementedError(f'No backend named {self.training_parameter.computation_backend}')
+            trained_function_return_done += self.__distributed_dask_backend(seq_job_function_parameter)
         # end if
         
         return trained_function_return_done    
@@ -330,33 +340,33 @@ class SubModuleCrossValidationFixedRange(object):
         
         return seq_task_arguments, already_trained_sub_learners    
     
-    def __check_dask_client(self) -> ty.Optional[Client]:
-        """Private method. 
-        Checking Dask client. If it is not given, I launch a local cluster.
-        """
-        __client = None
-        if self.training_parameter.computation_backend == 'dask':
-            if self.training_parameter.distributed_parameter.dask_scheduler_address is None:
-                logger.debug('Dask scheduler is not given. I launch a local cluster.')
-                __dask_cluster = LocalCluster(
-                    n_workers=self.training_parameter.distributed_parameter.n_dask_workers,
-                    threads_per_worker=self.training_parameter.distributed_parameter.n_threads_per_worker)
-                __client = __dask_cluster.get_client()
-                logger.debug(f'Dask scheduler address: {__dask_cluster.scheduler_address}')
-                self.training_parameter.distributed_parameter.dask_scheduler_address = __dask_cluster.scheduler_address
-            else:            
-                try:
-                    __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-                    logger.info(f'Connected to Dask scheduler: {__client}')
-                except OSError:
-                    logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
-                    self.training_parameter.computation_backend = 'single'
-                # end try
-            # end if
-        else:
-            __client = None
-        # end if
-        return __client
+    # def __check_dask_client(self) -> ty.Optional[Client]:
+    #     """Private method. 
+    #     Checking Dask client. If it is not given, I launch a local cluster.
+    #     """
+    #     __client = None
+    #     if self.training_parameter.computation_backend == 'dask':
+    #         if self.training_parameter.distributed_parameter.dask_scheduler_address is None:
+    #             logger.debug('Dask scheduler is not given. I launch a local cluster.')
+    #             __dask_cluster = LocalCluster(
+    #                 n_workers=self.training_parameter.distributed_parameter.n_dask_workers,
+    #                 threads_per_worker=self.training_parameter.distributed_parameter.n_threads_per_worker)
+    #             __client = __dask_cluster.get_client()
+    #             logger.debug(f'Dask scheduler address: {__dask_cluster.scheduler_address}')
+    #             self.training_parameter.distributed_parameter.dask_scheduler_address = __dask_cluster.scheduler_address
+    #         else:            
+    #             try:
+    #                 __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
+    #                 logger.info(f'Connected to Dask scheduler: {__client}')
+    #             except OSError:
+    #                 logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
+    #                 self.training_parameter.computation_backend = 'single'
+    #             # end try
+    #         # end if
+    #     else:
+    #         __client = None
+    #     # end if
+    #     return __client
     
     def main(self,
              training_dataset: BaseDataset,
@@ -366,9 +376,9 @@ class SubModuleCrossValidationFixedRange(object):
         self.validation_dataset = validation_dataset
         
         # -------------------------------------------------------
-        # Dask client check or launching.
-        __client = self.__check_dask_client()
-        
+        # # Dask client check or launching.
+        # __client = self.__check_dask_client()
+        __client = self.dask_client
         # -------------------------------------------------------
         # regularization parameter range
         if isinstance(self.training_parameter.algorithm_parameter.candidate_regularization_parameter, list):

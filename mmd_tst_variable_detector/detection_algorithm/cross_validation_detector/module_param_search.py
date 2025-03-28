@@ -65,7 +65,9 @@ class SubModuleCrossValidationParameterSearching(object):
                  resume_checkpoint_saver : ty.Optional[CheckPointSaverStabilitySelection] = None,
                  cv_detection_experiment_name: ty.Optional[str] = None,
                  path_work_dir: ty.Optional[Path] = None,
-                 seed_root_random: int = 42) -> None:
+                 seed_root_random: int = 42,
+                 dask_client: ty.Optional[Client] = None) -> None:
+        self.dask_client = dask_client
         # -------------------------------------------------------
         # attributes
         self.training_dataset: BaseDataset
@@ -84,33 +86,33 @@ class SubModuleCrossValidationParameterSearching(object):
         # TODO resume_checkpoint_saver not used currently.
         # self.resume_checkpoint_saver = resume_checkpoint_saver
         
-    def __check_dask_client(self) -> ty.Optional[Client]:
-        """Private method. 
-        Checking Dask client. If it is not given, I launch a local cluster.
-        """
-        __client = None
-        if self.training_parameter.computation_backend == 'dask':
-            if self.training_parameter.distributed_parameter.dask_scheduler_address is None:
-                logger.debug('Dask scheduler is not given. I launch a local cluster.')
-                __dask_cluster = LocalCluster(
-                    n_workers=self.training_parameter.distributed_parameter.n_dask_workers,
-                    threads_per_worker=self.training_parameter.distributed_parameter.n_threads_per_worker)
-                __client = __dask_cluster.get_client()
-                logger.debug(f'Dask scheduler address: {__dask_cluster.scheduler_address}')
-                self.training_parameter.distributed_parameter.dask_scheduler_address = __dask_cluster.scheduler_address
-            else:            
-                try:
-                    __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-                    logger.info(f'Connected to Dask scheduler: {__client}')
-                except OSError:
-                    logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
-                    self.training_parameter.computation_backend = 'single'
-                # end try
-            # end if
-        else:
-            __client = None
-        # end if
-        return __client        
+    # def __check_dask_client(self) -> ty.Optional[Client]:
+    #     """Private method. 
+    #     Checking Dask client. If it is not given, I launch a local cluster.
+    #     """
+    #     __client = None
+    #     if self.training_parameter.computation_backend == 'dask':
+    #         if self.training_parameter.distributed_parameter.dask_scheduler_address is None:
+    #             logger.debug('Dask scheduler is not given. I launch a local cluster.')
+    #             __dask_cluster = LocalCluster(
+    #                 n_workers=self.training_parameter.distributed_parameter.n_dask_workers,
+    #                 threads_per_worker=self.training_parameter.distributed_parameter.n_threads_per_worker)
+    #             __client = __dask_cluster.get_client()
+    #             logger.debug(f'Dask scheduler address: {__dask_cluster.scheduler_address}')
+    #             self.training_parameter.distributed_parameter.dask_scheduler_address = __dask_cluster.scheduler_address
+    #         else:            
+    #             try:
+    #                 __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
+    #                 logger.info(f'Connected to Dask scheduler: {__client}')
+    #             except OSError:
+    #                 logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
+    #                 self.training_parameter.computation_backend = 'single'
+    #             # end try
+    #         # end if
+    #     else:
+    #         __client = None
+    #     # end if
+    #     return __client        
     
     # def __retrive_task_return_done(self, 
     #                                sub_id_tuple: ty.List[ty.Tuple[RegularizationParameter, int]]
@@ -307,7 +309,8 @@ class SubModuleCrossValidationParameterSearching(object):
                 
         # -------------------------------------------------------
         # Dask client check or launching.
-        __client = self.__check_dask_client()
+        # __client = self.__check_dask_client()
+        __client = self.dask_client
         seq_sub_learner_obj = self.__execute_search_parameter(seq_parameters_cv, __client)
         
         return seq_sub_learner_obj

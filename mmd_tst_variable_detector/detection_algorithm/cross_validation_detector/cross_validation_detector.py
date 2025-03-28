@@ -180,7 +180,8 @@ class CrossValidationInterpretableVariableDetector(object):
                  training_dataset: ty.Optional[str] = None,
                  validation_dataset: ty.Optional[str] = None,
                  trainer_lightning: ty.Optional[pl.Trainer] = None,
-                 seed_root_random: int = 42):
+                 seed_root_random: int = 42,
+                 dask_client: ty.Optional[Client] = None):
         """
         
         Parameters
@@ -193,6 +194,8 @@ class CrossValidationInterpretableVariableDetector(object):
         resume_checkpoint_saver : typing.Optional[CheckPointSaverStabilitySelection]
             A Checkpoint handler saves the optimized results. The handler helps you resume the CV-Detection. 
         """
+        self.dask_client = dask_client
+
         if trainer_lightning is not None:
             raise ValueError('trainer_lightning is deprecated. Give `pytorch_trainer_config` parameter object instead.')
         # end if
@@ -219,12 +222,12 @@ class CrossValidationInterpretableVariableDetector(object):
         
         self.candidate_regularization_parameter: ty.List[RegularizationParameter]
         
-        if training_parameter.base_training_parameter.n_workers_train_dataloader > 0 or training_parameter.base_training_parameter.n_workers_validation_dataloader > 0:
-            if training_parameter.computation_backend == 'dask':
-                logger.info("Setting Dask without daemon mode since Dataloader has > 0 workers.")
-                dask.config.set(distributed__worker__daemon=False)
-            # end if
-        # end if
+        # if training_parameter.base_training_parameter.n_workers_train_dataloader > 0 or training_parameter.base_training_parameter.n_workers_validation_dataloader > 0:
+        #     if training_parameter.computation_backend == 'dask':
+        #         logger.info("Setting Dask without daemon mode since Dataloader has > 0 workers.")
+        #         dask.config.set(distributed__worker__daemon=False)
+        #     # end if
+        # # end if
         if training_parameter.algorithm_parameter.approach_regularization_parameter == "fixed_range":
             self.sub_executor = SubModuleCrossValidationFixedRange(
                 pytorch_trainer_config=self.pytorch_trainer_config,
@@ -233,7 +236,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 post_process_handler=self.post_process_handler,
                 resume_checkpoint_saver=self.resume_checkpoint_saver,
                 cv_detection_experiment_name=self.cv_detection_experiment_name,
-                seed_root_random=seed_root_random
+                seed_root_random=seed_root_random,
+                dask_client=dask_client,
             )
         elif training_parameter.algorithm_parameter.approach_regularization_parameter == "param_searching":
             self.sub_executor = SubModuleCrossValidationParameterSearching(
@@ -242,7 +246,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 estimator=self.estimator,
                 post_process_handler=self.post_process_handler,
                 resume_checkpoint_saver=self.resume_checkpoint_saver,
-                cv_detection_experiment_name=self.cv_detection_experiment_name)
+                cv_detection_experiment_name=self.cv_detection_experiment_name,
+                dask_client=dask_client)
         else:
             raise ValueError(f"approach_regularization_parameter must be either of 'fixed_range' or 'param_searching'.")
         # end if
@@ -252,23 +257,23 @@ class CrossValidationInterpretableVariableDetector(object):
             post_process_handler=self.post_process_handler,
             cv_detection_experiment_name=self.cv_detection_experiment_name)
 
-    def __check_dask_client(self) -> ty.Optional[Client]:
-        """Private method. 
-        Checking Dask client. If it is not given, I launch a local cluster.
-        """
-        __client = None
-        if self.training_parameter.computation_backend == 'dask':
-            try:
-                __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-                logger.info(f'Connected to Dask scheduler: {__client}')
-            except OSError:
-                logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
-                self.training_parameter.computation_backend = 'single'
-            # end try
-        else:
-            __client = None
-        # end if
-        return __client
+    # def __check_dask_client(self) -> ty.Optional[Client]:
+    #     """Private method. 
+    #     Checking Dask client. If it is not given, I launch a local cluster.
+    #     """
+    #     __client = None
+    #     if self.training_parameter.computation_backend == 'dask':
+    #         try:
+    #             __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
+    #             logger.info(f'Connected to Dask scheduler: {__client}')
+    #         except OSError:
+    #             logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
+    #             self.training_parameter.computation_backend = 'single'
+    #         # end try
+    #     else:
+    #         __client = None
+    #     # end if
+    #     return __client
 
     def run_stability_selection(self):
         """This function is just for keeping the version interchangeability.
@@ -336,9 +341,9 @@ class CrossValidationInterpretableVariableDetector(object):
         """Public method. Train post-ARD-optimization estimators."""
         assert cv_aggregated.stable_s_hat is not None and len(cv_aggregated.stable_s_hat) > 0
         
-        dask_client = self.__check_dask_client()
+        # dask_client = self.__check_dask_client()
         
-        if dask_client is None:
+        if self.dask_client is None:
             __, estimator_hard = post_ard_weight_optimization_hard(
                 selected_indexes=cv_aggregated.stable_s_hat,
                 estimator=self.estimator,
@@ -370,8 +375,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 training_dataset=self.training_dataset,
                 validation_dataset=self.validation_dataset
                 )
-            future_hard = dask_client.submit(func_obj_train_hard)
-            future_soft = dask_client.submit(func_obj_train_soft)
+            future_hard = self.dask_client.submit(func_obj_train_hard)
+            future_soft = self.dask_client.submit(func_obj_train_soft)
             
             __, estimator_hard = future_hard.result()  # type: ignore
             __, estimator_soft = future_soft.result()  # type: ignore

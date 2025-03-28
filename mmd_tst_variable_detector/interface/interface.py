@@ -338,6 +338,7 @@ class Interface(object):
         
     def fit(self):        
         # making directory for saving objects.
+        assert self.config_args.resource_config_args.path_work_dir is not None
         self.path_work_dir = Path(self.config_args.resource_config_args.path_work_dir)
         self.path_work_dir.mkdir(parents=True, exist_ok=True)
         

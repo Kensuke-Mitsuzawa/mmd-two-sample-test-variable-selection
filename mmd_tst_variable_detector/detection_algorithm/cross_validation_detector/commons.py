@@ -62,20 +62,7 @@ class AggregationKey:
 class DistributedComputingParameter:
     """Configurations for distributed computing during Cross-Validation approach.
     """
-    dask_scheduler_address: ty.Optional[str]
-    n_joblib: int = 2
-    joblib_backend: str = 'loky'  # recommend to use 'loky'. Most stable.
     job_batch_size: int = 5
-        
-    # when you wanna automatically launch Dask Cluster in the local,
-    # codebase uses the following parameters.
-    n_dask_workers: int = 4
-    n_threads_per_worker: int = 8
-
-    def __post_init__(self):
-        if self.dask_scheduler_address == "":
-            self.dask_scheduler_address = None
-
 
 
 @dataclass
@@ -143,17 +130,22 @@ class CrossValidationTrainParameters(object):
     """
     algorithm_parameter: CrossValidationAlgorithmParameter
     base_training_parameter: InterpretableMmdTrainParameters
-    distributed_parameter: DistributedComputingParameter
-    computation_backend: str = 'dask'  # local or dask
-    dist_parameter: ty.Optional[DistributedComputingParameter] = None
+    distributed_parameter = DistributedComputingParameter
+    # computation_backend = None  # deprecated
+    # dist_parameter = None  # deprecated
 
     def __post_init__(self):
-        assert self.computation_backend in ('single', 'dask', 'joblib')
-        
+        # assert self.computation_backend in ('single', 'dask', 'joblib')
+        if self.computation_backend is not None:
+            logger.warning("computation_backend is deprecated.")
         if self.dist_parameter is not None:
-            logger.warning("dist_parameter is deprecated. Use distributed_parameter instead.")
-            self.distributed_parameter = self.dist_parameter
+            logger.warning("dist_parameter is deprecated.")
         # end if
+        # deprecated
+        # if self.dist_parameter is not None:
+        #     logger.warning("dist_parameter is deprecated. Use distributed_parameter instead.")
+        #     self.distributed_parameter = self.dist_parameter
+        # # end if
 
 # -------------------------------------------------------------
 # Trained parameter
