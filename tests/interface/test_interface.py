@@ -97,7 +97,7 @@ def test_ram_backend_static_dataset_sample_based_linear_variable_selection(resou
         
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
-            dask_config_detection=DistributedConfigArgs(distributed_mode='single')
+            distributed_config_detection=DistributedConfigArgs(distributed_mode='single')
         ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
@@ -136,7 +136,9 @@ def test_ram_backend_static_dataset_sample_based_linear_variable_selection(resou
     assert isinstance(res_object.detection_result_sample_based.p_value, float)
     logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
     # getting result
-    shutil.rmtree(config_args.resource_config_args.path_work_dir)
+    assert isinstance(config_args.resource_config_args.path_work_dir, Path)
+    if config_args.resource_config_args.path_work_dir.exists():
+        config_args.resource_config_args.path_work_dir.rmdir()
 
 
 
@@ -155,7 +157,7 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd_cv(resource_p
     
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
-            dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
+            distributed_config_detection=DistributedConfigArgs(distributed_mode='single'),
         ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
@@ -193,6 +195,7 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd_cv(resource_p
     assert isinstance(res_object.detection_result_sample_based.p_value, float)
     logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
     # getting result
+    assert isinstance(config_args.resource_config_args.path_work_dir, Path)
     shutil.rmtree(config_args.resource_config_args.path_work_dir)
 
 
@@ -215,7 +218,7 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd_baseline_mmd(
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
             path_work_dir=path_work_dir,
-            dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
+            distributed_config_detection=DistributedConfigArgs(distributed_mode='single'),
         ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
@@ -265,7 +268,7 @@ def test_ram_backend_static_dataset_sample_based_wasserstein_independence(resour
         
     config_args = InterfaceConfigArgs(
         resource_config_args=ResourceConfigArgs(
-            dask_config_detection=DistributedConfigArgs(distributed_mode='single'),
+            distributed_config_detection=DistributedConfigArgs(distributed_mode='single'),
         ),
         approach_config_args=ApproachConfigArgs(
             approach_data_representation='sample_based',
@@ -304,7 +307,7 @@ def test_ram_backend_static_dataset_sample_based_wasserstein_independence(resour
     assert isinstance(res_object.detection_result_sample_based.p_value, float)
     logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
     # getting result
-
+    assert isinstance(config_args.resource_config_args.path_work_dir, Path)
     shutil.rmtree(config_args.resource_config_args.path_work_dir)
 
 

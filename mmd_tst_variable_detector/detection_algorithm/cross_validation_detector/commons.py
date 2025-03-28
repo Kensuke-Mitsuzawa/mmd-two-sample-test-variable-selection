@@ -130,22 +130,10 @@ class CrossValidationTrainParameters(object):
     """
     algorithm_parameter: CrossValidationAlgorithmParameter
     base_training_parameter: InterpretableMmdTrainParameters
-    distributed_parameter = DistributedComputingParameter
+    distributed_parameter: DistributedComputingParameter
     # computation_backend = None  # deprecated
     # dist_parameter = None  # deprecated
 
-    def __post_init__(self):
-        # assert self.computation_backend in ('single', 'dask', 'joblib')
-        if self.computation_backend is not None:
-            logger.warning("computation_backend is deprecated.")
-        if self.dist_parameter is not None:
-            logger.warning("dist_parameter is deprecated.")
-        # end if
-        # deprecated
-        # if self.dist_parameter is not None:
-        #     logger.warning("dist_parameter is deprecated. Use distributed_parameter instead.")
-        #     self.distributed_parameter = self.dist_parameter
-        # # end if
 
 # -------------------------------------------------------------
 # Trained parameter

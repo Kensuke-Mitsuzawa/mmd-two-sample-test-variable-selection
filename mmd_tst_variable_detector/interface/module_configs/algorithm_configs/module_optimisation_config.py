@@ -2,11 +2,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 import typing as ty
 import logging
-import numpy as np
-import torch
-
-from distributed import Client
-
 
 # CV selection modules
 from ....detection_algorithm.cross_validation_detector import (
@@ -15,9 +10,6 @@ from ....detection_algorithm.cross_validation_detector import (
     CrossValidationAlgorithmParameter,
     CrossValidationTrainParameters,
 )
-from ....datasets import (
-    BaseDataset
-)
 from ....detection_algorithm.search_regularization_min_max import RegularizationSearchParameters
 from ....detection_algorithm.early_stoppings import (
     ConvergenceEarlyStop,
@@ -25,12 +17,10 @@ from ....detection_algorithm.early_stoppings import (
     # ArdWeightsEarlyStopping
 )
 from ....detection_algorithm.pytorch_lightning_trainer import PytorchLightningDefaultArguments
-from ....weights_initialization.weights_initialization import weights_initialization
 
 from ....assessment_helper import default_settings
 
 from .. import (
-    ApproachConfigArgs,
     AlgorithmOneConfigArgs,
     CvSelectionConfigArgs,
     ResourceConfigArgs,
@@ -47,7 +37,6 @@ class MmdOptimisationConfigTemplate(ABC):
     @abstractmethod
     def get_configs(self,
                     path_work_dir: Path,
-                    dask_scheduler_address: ty.Optional[str],
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
                     resource_config_args: ResourceConfigArgs
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
@@ -64,7 +53,6 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
 
     def get_configs(self,
                     path_work_dir: Path,
-                    dask_scheduler_address: ty.Optional[str],
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
                     resource_config_args: ResourceConfigArgs
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
@@ -123,15 +111,12 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
             approach_regularization_parameter='fixed_range',
             pre_filtering_trained_estimator='off'
         )
-        distributed_parameter = DistributedComputingParameter(
-            dask_scheduler_address=dask_scheduler_address
-        )
+        distributed_parameter = DistributedComputingParameter()
         
         training_parameter = CrossValidationTrainParameters(
             algorithm_parameter=algorithm_parameter,
             base_training_parameter=base_training_parameter,
-            distributed_parameter=distributed_parameter,
-            computation_backend = 'dask')
+            distributed_parameter=distributed_parameter)
         
         # NOTE: I forcely update the search strategy. It's always fixed to 'heuristic'.
         if isinstance(algorithm_config, BaselineMmdConfigArgs):
@@ -140,6 +125,99 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
             algorithm_config.parameter_search_parameter.search_strategy = 'heuristic'
 
         return training_parameter, pl_trainer_config
+
+
+
+
+class ConfigRapid(MmdOptimisationConfigTemplate):
+    def get_configs(self,
+                    path_work_dir: Path,
+                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
+                    resource_config_args: ResourceConfigArgs
+                    ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
+        """The training configuration that I used in study-71.
+        
+        References
+        ----------
+        https://github.com/Kensuke-Mitsuzawa/mmd-tst-variable-detector/issues/71
+        """        
+        # TODO Reset this config. Must be longer
+        seq_early_stopper = [
+            ConvergenceEarlyStop(check_span=100, ignore_epochs=200),
+            VariableEarlyStopping(ignore_epochs=600),
+        ]
+        
+        if resource_config_args.train_accelerator == 'cuda':
+            n_device = 1
+        else:
+            n_device = 'auto'
+        # end if
+        
+        pl_trainer_config = PytorchLightningDefaultArguments(
+            max_epochs=algorithm_config.max_epoch,
+            callbacks=seq_early_stopper,
+            enable_checkpointing=False,
+            enable_progress_bar=True,
+            enable_model_summary=False,
+            logger=None,
+            default_root_dir=path_work_dir,
+            devices=n_device)
+        
+        base_training_parameter = InterpretableMmdTrainParameters(
+            is_use_log=algorithm_config.batch_size,
+            lr_scheduler=default_settings.lr_scheduler,
+            lr_scheduler_monitor_on='train_loss',
+            optimizer_args={"lr": 0.01},
+            n_workers_train_dataloader=algorithm_config.dataloader_n_workers_train_dataloader,
+            n_workers_validation_dataloader=algorithm_config.dataloader_n_workers_validation_dataloader,
+            dataloader_persistent_workers=algorithm_config.dataloader_persistent_workers,
+            limit_steps_early_stop_negative_mmd=3000)  # comment: 3000 for tmp setting
+        
+        assert resource_config_args.dask_config_detection is not None, 'resource_config_args.dask_config_detection is not None.'
+        if isinstance(algorithm_config, CvSelectionConfigArgs):
+            algorithm_parameter = CrossValidationAlgorithmParameter(
+                candidate_regularization_parameter='auto',
+                approach_regularization_parameter=algorithm_config.approach_regularization_parameter,
+                n_subsampling=algorithm_config.n_subsampling,
+                n_permutation_test=algorithm_config.n_permutation_test,
+                regularization_search_parameter=algorithm_config.parameter_search_parameter,
+                weighting_mode='p_value_min_test_power',
+                stability_score_base='ard',
+                permutation_test_metric='sliced_wasserstein',
+                pre_filtering_trained_estimator='off')
+            distributed_parameter = DistributedComputingParameter()
+            
+            # is_use_dask = 'dask' if dask_scheduler_address is not None else 'single'
+            
+            training_parameter = CrossValidationTrainParameters(
+                algorithm_parameter,
+                base_training_parameter,
+                distributed_parameter)
+        elif isinstance(algorithm_config, AlgorithmOneConfigArgs):
+            # I use the same configuration as the CV-selection.
+            algorithm_parameter = CrossValidationAlgorithmParameter(
+                candidate_regularization_parameter='auto',
+                n_subsampling=1,
+                regularization_search_parameter=algorithm_config.parameter_search_parameter)
+            distributed_parameter = DistributedComputingParameter()
+            
+            training_parameter = CrossValidationTrainParameters(
+                algorithm_parameter,
+                base_training_parameter,
+                distributed_parameter)
+        elif isinstance(algorithm_config, BaselineMmdConfigArgs):
+            # I use the same configuration as the CV-selection.
+            distributed_parameter = DistributedComputingParameter()
+            training_parameter = CrossValidationTrainParameters(
+                algorithm_parameter=None,
+                base_training_parameter=base_training_parameter,
+                distributed_parameter=distributed_parameter,)
+        else:
+            raise ValueError(f'Invalid type of algorithm_config: {type(algorithm_config)}')
+        # end if
+        
+        return training_parameter, pl_trainer_config
+    
 
 
 # class ConfigTPamiDraftVer2(MmdOptimisationConfigTemplate):
@@ -227,102 +305,6 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
 #         training_conf_args.parameter_search_parameter.search_strategy = 'heuristic'
 
 #         return training_parameter, pl_trainer_config
-
-
-
-class ConfigRapid(MmdOptimisationConfigTemplate):
-    def get_configs(self,
-                    path_work_dir: Path,
-                    dask_scheduler_address: ty.Optional[str],
-                    algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
-                    resource_config_args: ResourceConfigArgs
-                    ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
-        """The training configuration that I used in study-71.
-        
-        References
-        ----------
-        https://github.com/Kensuke-Mitsuzawa/mmd-tst-variable-detector/issues/71
-        """        
-        # TODO Reset this config. Must be longer
-        seq_early_stopper = [
-            ConvergenceEarlyStop(check_span=100, ignore_epochs=200),
-            VariableEarlyStopping(ignore_epochs=600),
-        ]
-        
-        if resource_config_args.train_accelerator == 'cuda':
-            n_device = 1
-        else:
-            n_device = 'auto'
-        # end if
-        
-        pl_trainer_config = PytorchLightningDefaultArguments(
-            max_epochs=algorithm_config.max_epoch,
-            callbacks=seq_early_stopper,
-            enable_checkpointing=False,
-            enable_progress_bar=True,
-            enable_model_summary=False,
-            logger=None,
-            default_root_dir=path_work_dir,
-            devices=n_device)
-        
-        base_training_parameter = InterpretableMmdTrainParameters(
-            is_use_log=algorithm_config.batch_size,
-            lr_scheduler=default_settings.lr_scheduler,
-            lr_scheduler_monitor_on='train_loss',
-            optimizer_args={"lr": 0.01},
-            n_workers_train_dataloader=algorithm_config.dataloader_n_workers_train_dataloader,
-            n_workers_validation_dataloader=algorithm_config.dataloader_n_workers_validation_dataloader,
-            dataloader_persistent_workers=algorithm_config.dataloader_persistent_workers,
-            limit_steps_early_stop_negative_mmd=3000)  # comment: 3000 for tmp setting
-        
-        assert resource_config_args.dask_config_detection is not None, 'resource_config_args.dask_config_detection is not None.'
-        if isinstance(algorithm_config, CvSelectionConfigArgs):
-            algorithm_parameter = CrossValidationAlgorithmParameter(
-                candidate_regularization_parameter='auto',
-                approach_regularization_parameter=algorithm_config.approach_regularization_parameter,
-                n_subsampling=algorithm_config.n_subsampling,
-                n_permutation_test=algorithm_config.n_permutation_test,
-                regularization_search_parameter=algorithm_config.parameter_search_parameter,
-                weighting_mode='p_value_min_test_power',
-                stability_score_base='ard',
-                permutation_test_metric='sliced_wasserstein',
-                pre_filtering_trained_estimator='off')
-            distributed_parameter = DistributedComputingParameter(dask_scheduler_address=dask_scheduler_address)
-            
-            # is_use_dask = 'dask' if dask_scheduler_address is not None else 'single'
-            
-            training_parameter = CrossValidationTrainParameters(
-                algorithm_parameter,
-                base_training_parameter,
-                distributed_parameter,
-                computation_backend=resource_config_args.dask_config_detection.distributed_mode)
-        elif isinstance(algorithm_config, AlgorithmOneConfigArgs):
-            # I use the same configuration as the CV-selection.
-            algorithm_parameter = CrossValidationAlgorithmParameter(
-                candidate_regularization_parameter='auto',
-                n_subsampling=1,
-                regularization_search_parameter=algorithm_config.parameter_search_parameter)
-            distributed_parameter = DistributedComputingParameter(dask_scheduler_address=dask_scheduler_address)
-            
-            training_parameter = CrossValidationTrainParameters(
-                algorithm_parameter,
-                base_training_parameter,
-                distributed_parameter,
-                computation_backend=resource_config_args.dask_config_detection.distributed_mode)
-        elif isinstance(algorithm_config, BaselineMmdConfigArgs):
-            # I use the same configuration as the CV-selection.
-            distributed_parameter = DistributedComputingParameter(dask_scheduler_address=dask_scheduler_address)
-            training_parameter = CrossValidationTrainParameters(
-                algorithm_parameter=None,
-                base_training_parameter=base_training_parameter,
-                distributed_parameter=distributed_parameter,
-                computation_backend=resource_config_args.dask_config_detection.distributed_mode)            
-        else:
-            raise ValueError(f'Invalid type of algorithm_config: {type(algorithm_config)}')
-        # end if
-        
-        return training_parameter, pl_trainer_config
-    
 
 
 # def get_config_tpami_draft(path_work_dir: Path,

@@ -91,41 +91,6 @@ class SubModuleCrossValidationFixedRange(object):
         sub_id_tuple = [tuple_sub_id for tuple_sub_id in sub_id_tuple if tuple_sub_id not in already_trained_sub_learners_ids]
 
         return sub_id_tuple, already_trained_sub_learners
-        
-    # def __distributed_joblib_backend(self,
-    #                                  seq_task_arguments: ty.List[RequestDistributedFunction]
-    #                                  ) -> ty.List[SubLearnerTrainingResult]:
-    #     """
-
-    #     :return:
-    #     """
-    #     # seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
-
-    #     batch_n = self.training_parameter.distributed_parameter.job_batch_size
-    #     seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
-
-    #     seq_results = []
-    #     for on_job_batch in seq_batch:
-    #         __seq_results = joblib.Parallel(
-    #             n_jobs=self.training_parameter.distributed_parameter.n_joblib,
-    #             backend=self.training_parameter.distributed_parameter.joblib_backend)(
-    #             joblib.delayed(dask_worker_script)(args) for args in on_job_batch)
-    #         seq_results += __seq_results
-
-    #         # save opt results
-    #         if self.resume_checkpoint_saver is not None:
-    #             for sub_learner_result in __seq_results:
-    #                 assert isinstance(sub_learner_result, SubLearnerTrainingResult)
-    #                 self.resume_checkpoint_saver.save_checkpoint(sub_learner_result)
-    #         # end if
-
-    #         if self.post_process_handler is not None:
-    #             logger.debug('logging post-process results...')
-    #             self.__log_post_process(__seq_results)  # type: ignore
-    #             logger.debug('logging Done')
-    #         # end if
-            
-    #     return seq_results
     
     def __log_post_process(self, seq_results_one_batch: ty.List[SubLearnerTrainingResult]):
         """Private API. Logging post-process results."""
@@ -339,35 +304,7 @@ class SubModuleCrossValidationFixedRange(object):
         seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
         
         return seq_task_arguments, already_trained_sub_learners    
-    
-    # def __check_dask_client(self) -> ty.Optional[Client]:
-    #     """Private method. 
-    #     Checking Dask client. If it is not given, I launch a local cluster.
-    #     """
-    #     __client = None
-    #     if self.training_parameter.computation_backend == 'dask':
-    #         if self.training_parameter.distributed_parameter.dask_scheduler_address is None:
-    #             logger.debug('Dask scheduler is not given. I launch a local cluster.')
-    #             __dask_cluster = LocalCluster(
-    #                 n_workers=self.training_parameter.distributed_parameter.n_dask_workers,
-    #                 threads_per_worker=self.training_parameter.distributed_parameter.n_threads_per_worker)
-    #             __client = __dask_cluster.get_client()
-    #             logger.debug(f'Dask scheduler address: {__dask_cluster.scheduler_address}')
-    #             self.training_parameter.distributed_parameter.dask_scheduler_address = __dask_cluster.scheduler_address
-    #         else:            
-    #             try:
-    #                 __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-    #                 logger.info(f'Connected to Dask scheduler: {__client}')
-    #             except OSError:
-    #                 logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
-    #                 self.training_parameter.computation_backend = 'single'
-    #             # end try
-    #         # end if
-    #     else:
-    #         __client = None
-    #     # end if
-    #     return __client
-    
+        
     def main(self,
              training_dataset: BaseDataset,
              validation_dataset: ty.Optional[BaseDataset] = None

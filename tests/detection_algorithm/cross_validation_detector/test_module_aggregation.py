@@ -61,7 +61,7 @@ def test_module_aggregation():
             is_attempt_all_weighting=True,
             pre_filtering_trained_estimator='ranking_top_ratio'),
         base_training_parameter=InterpretableMmdTrainParameters(),
-        distributed_parameter=DistributedComputingParameter(dask_scheduler_address=None)
+        distributed_parameter=DistributedComputingParameter()
     )
 
     post_log_handler = PostProcessLoggerHandler(

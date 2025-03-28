@@ -95,8 +95,6 @@ class RegularizationSearchParameters:
     reg_parameter_search_upper_l1: float = 2.0
     reg_parameter_search_upper_l2: float = 0.0
     
-    
-    backend: str = 'single'  # single or dask
     path_optuna_study_db: ty.Optional[Path] = None
 
     def __post_init__(self):

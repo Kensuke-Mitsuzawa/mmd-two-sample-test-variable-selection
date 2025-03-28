@@ -222,12 +222,6 @@ class CrossValidationInterpretableVariableDetector(object):
         
         self.candidate_regularization_parameter: ty.List[RegularizationParameter]
         
-        # if training_parameter.base_training_parameter.n_workers_train_dataloader > 0 or training_parameter.base_training_parameter.n_workers_validation_dataloader > 0:
-        #     if training_parameter.computation_backend == 'dask':
-        #         logger.info("Setting Dask without daemon mode since Dataloader has > 0 workers.")
-        #         dask.config.set(distributed__worker__daemon=False)
-        #     # end if
-        # # end if
         if training_parameter.algorithm_parameter.approach_regularization_parameter == "fixed_range":
             self.sub_executor = SubModuleCrossValidationFixedRange(
                 pytorch_trainer_config=self.pytorch_trainer_config,
@@ -256,24 +250,6 @@ class CrossValidationInterpretableVariableDetector(object):
             training_parameter=self.training_parameter,
             post_process_handler=self.post_process_handler,
             cv_detection_experiment_name=self.cv_detection_experiment_name)
-
-    # def __check_dask_client(self) -> ty.Optional[Client]:
-    #     """Private method. 
-    #     Checking Dask client. If it is not given, I launch a local cluster.
-    #     """
-    #     __client = None
-    #     if self.training_parameter.computation_backend == 'dask':
-    #         try:
-    #             __client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-    #             logger.info(f'Connected to Dask scheduler: {__client}')
-    #         except OSError:
-    #             logger.warning('Dask scheduler is not found. I run the computation in a single machine.')
-    #             self.training_parameter.computation_backend = 'single'
-    #         # end try
-    #     else:
-    #         __client = None
-    #     # end if
-    #     return __client
 
     def run_stability_selection(self):
         """This function is just for keeping the version interchangeability.

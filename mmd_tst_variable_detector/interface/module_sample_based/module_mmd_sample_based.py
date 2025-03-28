@@ -37,10 +37,7 @@ from ...detection_algorithm import detection_algorithm_one, AlgorithmOneResult
 # mmd baseline
 from ...detection_algorithm.baseline_mmd import BaselineMmdResult, baseline_mmd
 
-from ...assessment_helper import default_settings
-
 from .. import data_objects
-from ..module_configs.algorithm_configs import module_optimisation_config
 
 from ...logger_unit import handler
 
@@ -52,20 +49,20 @@ logger.addHandler(handler)
 
 def get_mmd_config_args(approach_config_args: ApproachConfigArgs,
                         detector_algorithm_config_args: DetectorAlgorithmConfigArgs
-                        ) -> ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs]:
+                        ) -> ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs]:
 
     if approach_config_args.approach_interpretable_mmd == 'cv_selection':
-        mmd_config_args: CvSelectionConfigArgs = detector_algorithm_config_args.mmd_cv_selection_args
+        mmd_config_args = detector_algorithm_config_args.mmd_cv_selection_args
 
         assert mmd_config_args is not None, 'mmd_cv_selection_args is not given.'
         assert isinstance(mmd_config_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
     elif approach_config_args.approach_interpretable_mmd == 'algorithm_one':
-        mmd_config_args: AlgorithmOneConfigArgs = detector_algorithm_config_args.mmd_algorithm_one_args
+        mmd_config_args = detector_algorithm_config_args.mmd_algorithm_one_args
 
         assert mmd_config_args is not None, 'mmd_algorithm_one_args is not given.'
         assert isinstance(mmd_config_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
     elif approach_config_args.approach_interpretable_mmd == 'baseline_mmd':
-        mmd_config_args: BaselineMmdConfigArgs = detector_algorithm_config_args.mmd_baseline_args
+        mmd_config_args = detector_algorithm_config_args.mmd_baseline_args
 
         assert mmd_config_args is not None, 'mmd_baseline_args is not given.'
         assert isinstance(mmd_config_args, BaselineMmdConfigArgs), 'mmd_baseline_args is not given.'
@@ -170,18 +167,10 @@ def __main_run(dataset_train: BaseDataset,
         biased=mmd_estimator_config.biased,
         variance_term=mmd_estimator_config.variance_term)
         
-    # comment: optuna search exists already in CV intergace.
-    # No need to execute it manually.
-    if dask_client is not None:
-        dask_scheduler_address = dask_client.scheduler.address if dask_client is not None else None
-    else:
-        dask_scheduler_address = ''
-    # end if
 
     # Obtaining the optimiser configuration.
     cv_train_param, pl_param = training_conf_args.detector_algorithm_config_args.mmd_optimiser_configs.get_configs(
-        path_work_dir=path_dir_model, 
-        dask_scheduler_address=dask_scheduler_address, 
+        path_work_dir=path_dir_model,
         algorithm_config=mmd_config_args,
         resource_config_args=training_conf_args.resource_config_args)
     
@@ -201,7 +190,8 @@ def __main_run(dataset_train: BaseDataset,
             training_parameter=cv_train_param,
             estimator=mmd_estimator,
             post_process_handler=post_process_handler,
-            seed_root_random=seed_root_random)
+            seed_root_random=seed_root_random,
+            dask_client=dask_client)
         res = detector.run_cv_detection(dataset_train)
     elif isinstance(mmd_config_args, AlgorithmOneConfigArgs):
         # comment: I take `cv_config` for common.
@@ -256,6 +246,7 @@ def main(config_args: InterfaceConfigArgs,
         assert isinstance(config_args.detector_algorithm_config_args.mmd_algorithm_one_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
     # end if
     
+    assert config_args.resource_config_args.path_work_dir is not None, 'path_work_dir is not given.'
     path_resource_root = Path(config_args.resource_config_args.path_work_dir)
     path_dir_model = path_resource_root / config_args.resource_config_args.dir_name_model
     path_dir_ml_logger = path_resource_root / config_args.resource_config_args.dir_name_ml_logger
