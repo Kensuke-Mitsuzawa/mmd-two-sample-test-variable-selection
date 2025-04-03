@@ -97,8 +97,11 @@ class SubModuleCrossValidationFixedRange(object):
         assert self.post_process_handler is not None, 'self.post_process_handler must not be None.'
         for __res in seq_results_one_batch:
             __run_name = __res.get_job_id_string()
-            __loggers = self.post_process_handler.initialize_logger(run_name=__run_name, group_name=self.cv_detection_experiment_name)
-            self.post_process_handler.log(loggers=__loggers, target_object=__res)
+            try:
+                __loggers = self.post_process_handler.initialize_logger(run_name=__run_name, group_name=self.cv_detection_experiment_name)
+                self.post_process_handler.log(loggers=__loggers, target_object=__res)
+            except OSError as e:
+                logger.warning(f'Failed to log post-process results. I skip logging {e}')
         # end for
     
     def __non_distributed_single_backend(self,
