@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 import typing as ty
 import logging
+import GPUtil
 
 # CV selection modules
 from ....detection_algorithm.cross_validation_detector import (
@@ -33,7 +34,16 @@ logger = logging.getLogger(f'{__package__}.{__name__}')
 logger.addHandler(handler)
 
 
-class MmdOptimisationConfigTemplate(ABC):    
+class MmdOptimisationConfigTemplate(ABC):
+
+    @staticmethod
+    def _get_less_busy_cuda_device() -> int:
+        """Get the less busy GPU device id."""
+        gpu_device_info = GPUtil.getGPUs()
+        seq_tuple_gpu_memory_utils = [(gpu_obj.id, gpu_obj.memoryUtil) for gpu_obj in gpu_device_info]
+        gpu_id_less_busy = sorted(seq_tuple_gpu_memory_utils, key=lambda x: x[1])[0]
+        return gpu_id_less_busy[0]
+
     @abstractmethod
     def get_configs(self,
                     path_work_dir: Path,
@@ -44,11 +54,15 @@ class MmdOptimisationConfigTemplate(ABC):
 # enc class
 
 
+
+
 class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
     def __init__(self,
-                 is_show_progress_bar: bool = True
+                 is_show_progress_bar: bool = True,
+                 is_select_less_busy_cuda_device: bool = True
                  ) -> None:
         super().__init__()
+        self.is_select_less_busy_cuda_device = is_select_less_busy_cuda_device
         self.is_show_progress_bar = is_show_progress_bar
 
     def get_configs(self,
@@ -69,7 +83,11 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
         )
 
         if resource_config_args.train_accelerator == 'cuda':
-            n_device = 1
+            # note: the variable name is `n_device`, but it is device id.
+            if self.is_select_less_busy_cuda_device:
+                n_device = self._get_less_busy_cuda_device()
+            else:
+                n_device = 1
         else:
             n_device = 'auto'
         # end if
@@ -130,6 +148,12 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
 
 
 class ConfigRapid(MmdOptimisationConfigTemplate):
+    def __init__(self,
+                 is_select_less_busy_cuda_device: bool = True) -> None:
+        super().__init__()
+        self.is_select_less_busy_cuda_device = is_select_less_busy_cuda_device
+
+
     def get_configs(self,
                     path_work_dir: Path,
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
@@ -148,7 +172,11 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
         ]
         
         if resource_config_args.train_accelerator == 'cuda':
-            n_device = 1
+            # note: the variable name is `n_device`, but it is device id.
+            if self.is_select_less_busy_cuda_device:
+                n_device = self._get_less_busy_cuda_device()
+            else:
+                n_device = 1
         else:
             n_device = 'auto'
         # end if

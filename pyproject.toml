@@ -50,6 +50,7 @@ sentencepiece = "^0.2.0"
 umap-learn = {extras = ["plot"], version = "^0.5.7"}
 openpyxl = "^3.1.5"
 geomloss = "^0.2.6"
+gputil = "^1.4.0"
 
 
 [tool.poetry.dev-dependencies]
