@@ -85,7 +85,8 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
         if resource_config_args.train_accelerator == 'cuda':
             # note: the variable name is `n_device`, but it is device id.
             if self.is_select_less_busy_cuda_device:
-                n_device = self._get_less_busy_cuda_device()
+                # Note: PytorchLightning requires a list of device ids.
+                n_device = [self._get_less_busy_cuda_device()]
             else:
                 n_device = 1
         else:
@@ -174,7 +175,8 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
         if resource_config_args.train_accelerator == 'cuda':
             # note: the variable name is `n_device`, but it is device id.
             if self.is_select_less_busy_cuda_device:
-                n_device = self._get_less_busy_cuda_device()
+                # Note: PytorchLightning requires a list of device ids.
+                n_device = [self._get_less_busy_cuda_device()]
             else:
                 n_device = 1
         else:
