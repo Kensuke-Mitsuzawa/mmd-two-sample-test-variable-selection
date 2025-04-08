@@ -106,10 +106,10 @@ def test_algorithm_one_min_max_param_range(resource_path_root: Path):
     parameter_base = InterpretableMmdTrainParameters(is_use_log=0)
     
     # permutation test runner
-    from ot import sliced_wasserstein_distance
-    permutation_test_runner = PermutationTest(
-        func_distance=sliced_wasserstein_distance,
-        n_permutation_test=10)
+    # from ot import sliced_wasserstein_distance
+    # permutation_test_runner = PermutationTest(
+    #     func_distance=sliced_wasserstein_distance,
+    #     n_permutation_test=10)
     
     DefaultEarlyStoppingRule = ConvergenceEarlyStop()
     pl_trainer_args = PytorchLightningDefaultArguments(
@@ -135,7 +135,9 @@ def test_algorithm_one_min_max_param_range(resource_path_root: Path):
         dataset_training=dataset_train,
         dataset_dev=dataset_dev,
         dataset_test=dataset_test,
-        permutation_test_runner_base=permutation_test_runner,
+        # permutation_test_runner_base=permutation_test_runner,
+        test_distance_functions=('sliced_wasserstein', ),
+        n_permutation_test=10,
         candidate_regularization_parameters=seq_regularization_parameter,
         post_process_handler=__post_process_logger_handler,
         regularization_search_parameter=RegularizationSearchParameters(
@@ -178,10 +180,10 @@ def test_algorithm_one_search_objective_based(resource_path_root: Path):
     parameter_base = InterpretableMmdTrainParameters(is_use_log=0)
     
     # permutation test runner
-    from ot import sliced_wasserstein_distance
-    permutation_test_runner = PermutationTest(
-        func_distance=sliced_wasserstein_distance,
-        n_permutation_test=10)
+    # from ot import sliced_wasserstein_distance
+    # permutation_test_runner = PermutationTest(
+    #     func_distance=sliced_wasserstein_distance,
+    #     n_permutation_test=10)
     
     DefaultEarlyStoppingRule = ConvergenceEarlyStop()
     pl_trainer_args = PytorchLightningDefaultArguments(
@@ -208,7 +210,9 @@ def test_algorithm_one_search_objective_based(resource_path_root: Path):
         dataset_training=dataset_train,
         dataset_dev=dataset_dev,
         dataset_test=dataset_test,
-        permutation_test_runner_base=permutation_test_runner,
+        # permutation_test_runner_base=permutation_test_runner,
+        test_distance_functions=('sliced_wasserstein', ),
+        n_permutation_test=10,
         candidate_regularization_parameters=seq_regularization_parameter,
         post_process_handler=__post_process_logger_handler,
         regularization_search_parameter=RegularizationSearchParameters(

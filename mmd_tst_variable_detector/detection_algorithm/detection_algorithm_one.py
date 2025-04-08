@@ -18,6 +18,7 @@ from pytorch_lightning.loggers.logger import Logger
 from .. import logger_unit
 # detector class sample selection based detector
 from ..utils.post_process_logger import log_postprocess_manually
+from .utils import permutation_tests
 from ..mmd_estimator import BaseMmdEstimator
 from ..datasets import BaseDataset
 from ..datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
@@ -125,15 +126,15 @@ class _AlgorithmOneRangeFunctionReturn(ty.NamedTuple):
 
 # TODO in the future I want to move this function.
 # I want to unify and make it common function among various approaches.
-def func_distance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    if isinstance(x, torch.Tensor):
-        x = x.cpu().detach().numpy()
-    if isinstance(y, torch.Tensor):
-        y = y.cpu().detach().numpy()
+# def func_distance_sliced_wasserstein_distance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+#     if isinstance(x, torch.Tensor):
+#         x = x.cpu().detach().numpy()
+#     if isinstance(y, torch.Tensor):
+#         y = y.cpu().detach().numpy()
     
-    v = ot.sliced_wasserstein_distance(x, y)
-    return torch.tensor(v) 
-# end def
+#     v = ot.sliced_wasserstein_distance(x, y)
+#     return torch.tensor(v) 
+# # end def
 
 
 
@@ -144,7 +145,7 @@ def __run_optimization_estimator(requests: _AlgorithmOneRangeFunctionRequestPayl
     """
     start_exec = time.time()
     
-    n_permutation_test = requests.n_permutation_test
+    # n_permutation_test = requests.n_permutation_test  # TODO delete this line.
     
     pl_trainer = pl.Trainer(**requests.pl_trainer_config.as_dict())
     
@@ -191,23 +192,29 @@ def __run_optimization_estimator(requests: _AlgorithmOneRangeFunctionRequestPayl
     Permutation Test objがNone -> 選択された変数のみをで、MMD estimatorのoptimizationを再実行。
     ２つのoptionを用意する。1. full sctratchでoptimization, 2. 用意されたARD weightsを初期値としてoptimization
     """
-    
     # selected variables based on the optimized result.
-    dataset_dev_select = dataset_dev.get_selected_variables_dataset(seq_selected_variable)
+    # dataset_dev_select = dataset_dev.get_selected_variables_dataset(seq_selected_variable)
     
     # Permutation Test for the dev. data
-    permutation_runner = requests.permutation_test_runner
-    if permutation_runner is None:
-        permutation_runner = PermutationTest(
-            func_distance=func_distance,
-            batch_size=mmd_variable_trainer.training_parameter.batch_size,
-            n_permutation_test=n_permutation_test)
-    # enf if
-    
-    p_dev, __ = permutation_runner.run_test(dataset_dev_select)
-    
-    # permutation test for test data
-    
+    # permutation_runner = requests.permutation_test_runner
+    # if permutation_runner is None:
+    #     permutation_runner = PermutationTest(
+    #         func_distance=func_distance_sliced_wasserstein_distance,  # type: ignore
+    #         batch_size=mmd_variable_trainer.training_parameter.batch_size,
+    #         n_permutation_test=n_permutation_test)
+    # # enf if
+    # p_dev, __ = permutation_runner.run_test(dataset_dev_select)
+    seq_dev_tst_result_container = permutation_tests.permutation_tests(
+        dataset_test=dataset_dev,
+        variable_selection_approach='hard',
+        interpretable_mmd_result=trained_result,
+        n_permutation_test=requests.n_permutation_test,
+        distance_functions=requests.test_distance_functions,
+    )
+    p_dev = np.max([__tst_obj.p_value for __tst_obj in seq_dev_tst_result_container])
+
+
+    # permutation test for test data    
     if requests.dataset_test is not None:
         if requests.dataset_test.is_dataset_on_ram():
             dataset_test = requests.dataset_test.generate_dataset_on_ram()
@@ -215,8 +222,15 @@ def __run_optimization_estimator(requests: _AlgorithmOneRangeFunctionRequestPayl
             dataset_test = requests.dataset_test
         # end if
         
-        dataset_test_select = dataset_test.get_selected_variables_dataset(seq_selected_variable)
-        p_test, __ = permutation_runner.run_test(dataset_test_select)
+        # dataset_test_select = dataset_test.get_selected_variables_dataset(seq_selected_variable)
+        # p_test, __ = permutation_runner.run_test(dataset_test_select)
+        seq_test_tst_result_container = permutation_tests.permutation_tests(
+            dataset_test=dataset_test,
+            variable_selection_approach='hard',
+            interpretable_mmd_result=trained_result,
+            n_permutation_test=requests.n_permutation_test,
+            distance_functions=requests.test_distance_functions,)
+        p_test = np.max([__tst_obj.p_value for __tst_obj in seq_test_tst_result_container])        
     else:
         p_test = None
     # end if
@@ -363,7 +377,8 @@ def __generate_distributed_arguments(seq_regularization_parameters: ty.List[Regu
                                      path_work_dir: Path,
                                      variable_detection_method: str,
                                      dataset_test: ty.Optional[BaseDataset] = None,
-                                     permutation_test_runner_base: ty.Optional[PermutationTest] = None,
+                                     #  permutation_test_runner_base: ty.Optional[PermutationTest] = None,
+                                     test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
                                      n_permutation_test: int = 500
                                      ) -> ty.List[_AlgorithmOneRangeFunctionRequestPayload]:
     seq_function_request_payload = []
@@ -391,11 +406,13 @@ def __generate_distributed_arguments(seq_regularization_parameters: ty.List[Regu
             dataset_training=dataset_training,
             dataset_dev=dataset_dev,
             dataset_test=dataset_test,
-            permutation_test_runner=permutation_test_runner_base,
             pl_trainer_config=_pl_trainer_config,
             variable_detection_method=variable_detection_method,
             path_work_dir=_path_trained_model,
-            n_permutation_test=n_permutation_test)
+            n_permutation_test=n_permutation_test,
+            test_distance_functions=test_distance_functions,
+            permutation_test_runner=None,
+        )
         seq_function_request_payload.append(__request_payload)
         # end if
     # end for
@@ -514,14 +531,13 @@ def __run_algorithm_one_min_max_param_range(
     dask_client: ty.Optional[Client] = None,
     dataset_test: ty.Optional[BaseDataset] = None,
     distributed_batch_size: int = 5,
-    permutation_test_runner_base: ty.Optional[PermutationTest] = None,
+    # permutation_test_runner_base: ty.Optional[PermutationTest] = None,
     variable_detection_method: str = "hist_based",
     test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
     n_permutation_test: int = 500
     ) -> ty.List[_AlgorithmOneRangeFunctionReturn]:
     """Running algorithm one with min. and max. of regularization parameters.
     """
-    logger.info(f'test_distance_functions is not used for the moment: {test_distance_functions}')
     
     seq_optimized_mmd = []
     if candidate_regularization_parameters == 'auto_min_max_range':
@@ -559,7 +575,8 @@ def __run_algorithm_one_min_max_param_range(
         path_work_dir=path_work_dir,
         variable_detection_method=variable_detection_method,
         dataset_test=dataset_test,
-        permutation_test_runner_base=permutation_test_runner_base,
+        # permutation_test_runner_base=permutation_test_runner_base,
+        test_distance_functions=test_distance_functions,
         n_permutation_test=n_permutation_test)
 
     # batching function requests.
@@ -620,7 +637,7 @@ def __run_algorithm_one_search_objective_based(
     post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
     dask_client: ty.Optional[Client] = None,
     dataset_test: ty.Optional[BaseDataset] = None,
-    permutation_test_runner_base: ty.Optional[PermutationTest] = None,
+    # permutation_test_runner_base: ty.Optional[PermutationTest] = None,
     variable_detection_method: str = "hist_based",
     test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
     n_permutation_test: int = 500
@@ -694,7 +711,7 @@ def __run_algorithm_one_search_objective_based(
                 dataset_training=dataset_training,
                 dataset_dev=dataset_dev,
                 dataset_test=dataset_test,
-                permutation_test_runner=permutation_test_runner_base,
+                # permutation_test_runner=permutation_test_runner_base,
                 variable_detection_method=variable_detection_method),
             trained_result=__optuna_dask_res.mmd_train_result,
             indices_detected=__optuna_dask_res.selected_variables,
@@ -725,7 +742,7 @@ def detection_algorithm_one(
     distributed_batch_size: int = -1,
     variable_detection_method: str = "hist_based",
     is_p_value_filter: bool = False,
-    permutation_test_runner_base: ty.Optional[PermutationTest] = None,
+    # permutation_test_runner_base: ty.Optional[PermutationTest] = None,
     dataset_test: ty.Optional[BaseDataset] = None,
     path_work_dir: ty.Optional[Path] = None,
     post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
@@ -788,6 +805,9 @@ def detection_algorithm_one(
     
     seq_optimized_mmd = []
     
+    # TODO: inconsistent implementation. `__run_algorithm_one_min_max_param_range` has the argument `permutation_test_runner_base`.
+    # However, `permutation_test_runner_base` in `__run_algorithm_one_search_objective_based` has no effect.
+    # I have to make them consistent.
     if __reg_mode == 'min_max_param_range':
         seq_optimized_mmd = __run_algorithm_one_min_max_param_range(
             candidate_regularization_parameters=candidate_regularization_parameters,
@@ -802,10 +822,11 @@ def detection_algorithm_one(
             dask_client=dask_client,
             dataset_test=dataset_test,
             distributed_batch_size=distributed_batch_size,
-            permutation_test_runner_base=permutation_test_runner_base,
+            # permutation_test_runner_base=permutation_test_runner_base,
             variable_detection_method=variable_detection_method,
             test_distance_functions=test_distance_functions,
-            n_permutation_test=n_permutation_test)
+            n_permutation_test=n_permutation_test
+            )
     elif __reg_mode == 'search_objective_based':
         seq_optimized_mmd = __run_algorithm_one_search_objective_based(
             candidate_regularization_parameters=candidate_regularization_parameters,
@@ -819,7 +840,7 @@ def detection_algorithm_one(
             post_process_handler=post_process_handler,
             dask_client=dask_client,
             dataset_test=dataset_test,
-            permutation_test_runner_base=permutation_test_runner_base,
+            # permutation_test_runner_base=permutation_test_runner_base,
             variable_detection_method=variable_detection_method,
             test_distance_functions=test_distance_functions,
             n_permutation_test=n_permutation_test)

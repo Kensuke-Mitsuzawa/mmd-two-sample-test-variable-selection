@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import torch
 
 from ....detection_algorithm.search_regularization_min_max.optuna_module.commons import RegularizationSearchParameters
-
+from ....detection_algorithm.utils.permutation_tests import POSSIBLE_DISTANCE_FUNCTIONS
 
 @dataclass
 class MmdEstimatorConfig:
@@ -42,7 +42,7 @@ class BaselineMmdConfigArgs:
     batch_size: int = -1
 
     # distance function used for permutation test
-    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sinkhorn', 'sliced_wasserstein')
+    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
     n_permutation_test: int = 1000
     
     mmd_estimator_config: MmdEstimatorConfig = MmdEstimatorConfig()
@@ -51,6 +51,9 @@ class BaselineMmdConfigArgs:
     dataloader_n_workers_train_dataloader: int = 0
     dataloader_n_workers_validation_dataloader: int = 0
     dataloader_persistent_workers: bool = False
+
+    def __post_init__(self):
+        assert set(self.test_distance_functions).issubset(set(POSSIBLE_DISTANCE_FUNCTIONS)), f'{self.test_distance_functions} is not supported.'
         
     def is_subclass_of(self, cls, parent_class_name):
         """
@@ -87,7 +90,7 @@ class CvSelectionConfigArgs:
         n_regularization_parameter=6)
 
     # distance function used for permutation test
-    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sinkhorn', 'sliced_wasserstein')
+    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
     n_permutation_test: int = 500
 
     # dataloader parameter
@@ -98,7 +101,8 @@ class CvSelectionConfigArgs:
     
     def __post_init__(self):
         assert self.approach_regularization_parameter in ('param_searching', 'fixed_range'), f'{self.approach_regularization_parameter} is not supported.'
-        
+        assert set(self.test_distance_functions).issubset(set(POSSIBLE_DISTANCE_FUNCTIONS)), f'{self.test_distance_functions} is not supported.'
+
     def is_subclass_of(self, cls, parent_class_name):
         """
         Recursively check if the class `cls` or any of its parent classes
@@ -135,7 +139,7 @@ class AlgorithmOneConfigArgs:
         n_regularization_parameter=6)
     
     # distance function used for permutation test
-    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sinkhorn', 'sliced_wasserstein')
+    test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
     n_permutation_test: int = 500
 
     # dataloader parameter
@@ -145,6 +149,7 @@ class AlgorithmOneConfigArgs:
     
     def __post_init__(self):
         assert self.approach_regularization_parameter in ('search_objective_based', 'auto_min_max_range'), f'{self.approach_regularization_parameter} is not supported.'
+        assert set(self.test_distance_functions).issubset(set(POSSIBLE_DISTANCE_FUNCTIONS)), f'{self.test_distance_functions} is not supported.'
 
     def is_subclass_of(self, cls, parent_class_name):
         """

@@ -29,6 +29,8 @@ from ... import logger_unit
 
 logger = logging.getLogger(f'{__package__}.{__name__}')
 
+POSSIBLE_DISTANCE_FUNCTIONS = ('mmd_ard', 'sliced_wasserstein', 'sinkhorn')
+
 
 @dataclasses.dataclass
 class _TwoSampleTestResultContainer:
@@ -301,7 +303,7 @@ def permutation_tests(
     variable_selection_approach: str. 'soft' or 'hard'.
         'hard' does select variables by discritizing. 'soft' does a multiplication operation of weight * data. 
     """
-    assert all(__f_name in ('mmd_ard', 'sliced_wasserstein', 'sinkhorn') for __f_name in distance_functions),\
+    assert all(__f_name in POSSIBLE_DISTANCE_FUNCTIONS for __f_name in distance_functions),\
         f'Undefined distance function: {distance_functions}'
     
     # -----------------------------------------------------------------------------------------
