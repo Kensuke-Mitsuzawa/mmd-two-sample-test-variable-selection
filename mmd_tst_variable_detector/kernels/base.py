@@ -19,32 +19,112 @@ from ..logger_unit import handler
 kernel_module_logger = logging.getLogger(f'{__package__}.kernels')
 kernel_module_logger.addHandler(handler)
 
-
-DEFAULT_RATIO_CUTOFF_CANDIDATES = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 0.7, 0.9) + tuple(
-    list(np.arange(1, 10, step=0.5)))
-
-
 # ------------------------------------------------------------------------------
 # Base kernel object
 
 
 class BaseKernel(torch.nn.Module, metaclass=abc.ABCMeta):
-    """Base class of Kernel function class."""
+    """Base class of Kernel function class.
+    This class implements abstract methods only."""
 
-    def __init__(self,
-                 distance_module: BaseDistanceModule,
-                 possible_shapes: typing.Tuple[int, ...],
-                 bandwidth: typing.Optional[torch.Tensor] = None,
-                 ard_weights: typing.Optional[torch.Tensor] = None,
-                 ard_weight_shape: typing.Optional[typing.Tuple[int, ...]] = None,
-                 is_force_cutoff: bool = False,
-                 ratio_cutoff: float = -1,
-                 heuristic_operation: str = 'median',
-                 is_auto_adjust_gamma: bool = False,
-                 is_dimension_median_heuristic: bool = True,
-                 opt_bandwidth: bool = False,
-                 kernel_computation_type: str = "quadratic"):
+    def __init__(self):
         super(BaseKernel, self).__init__()
+
+    @classmethod
+    @abc.abstractmethod
+    def from_dataset(cls, dataset: BaseDataset) -> "BaseKernel":
+        """Public API method to create a kernel object from a dataset.
+        
+        Must be implemented in a subclass.
+        """
+        raise NotImplementedError()
+    
+    # --------------------------------------------------------------------------------------------------
+    # methods to be implemented.
+    # private methods
+
+    @abc.abstractmethod
+    def _get_median_single(self,
+                           x: torch.Tensor,
+                           y: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _get_median_dim(self,
+                        x: torch.Tensor,
+                        y: torch.Tensor) -> typing.Optional[torch.Tensor]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _compute_kernel_matrix_single(self,
+                                      x: torch.Tensor,
+                                      y: torch.Tensor,
+                                      bandwidth: typing.Optional[torch.Tensor]) -> KernelMatrixObject:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _compute_kernel_matrix_dim(self,
+                                   x: torch.Tensor,
+                                   y: torch.Tensor,
+                                   bandwidth: typing.Optional[torch.Tensor]) -> KernelMatrixObject:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _get_trainable_parameters(self) -> typing.List[torch.nn.Parameter]:
+        """An abstract method that returns a list of trainable parameters.
+
+        :return:
+        """
+        raise NotImplementedError()
+    
+    # -----------------------------------------------------------------------------    
+    # methods to be implemented.
+    # public API methods
+
+    @abc.abstractmethod
+    def compute_kernel_matrix(self,
+                              x: torch.Tensor,
+                              y: torch.Tensor,
+                              bandwidth: typing.Optional[torch.Tensor] = None) -> KernelMatrixObject:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_hyperparameters(self) -> typing.Dict[str, typing.Any]:
+        """A method to return a dictionary of hyperparameters.
+
+        :return:
+        """
+        raise NotImplementedError()
+
+# -----------------------------------------------------------------------------
+
+
+DEFAULT_RATIO_CUTOFF_CANDIDATES = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 0.7, 0.9) + tuple(
+    list(np.arange(1, 10, step=0.5)))
+
+
+
+class BaseKernelLengthScaleSettings(BaseKernel):
+    """Kernel class with utils methods for computing length scales.
+    
+    The ARD weights are mandatory arguments.
+    Hint: when you do not need ARD weights, set a torch tensor of torch.ones.
+    """
+    def __init__(self, 
+                 distance_module: BaseDistanceModule, 
+                 possible_shapes: typing.Tuple[int], 
+                 bandwidth: typing.Union[torch.Tensor, None] = None, 
+                 ard_weights: typing.Union[torch.Tensor, None] = None, 
+                 ard_weight_shape: typing.Union[typing.Tuple[int], None] = None, 
+                 is_force_cutoff: bool = False, 
+                 ratio_cutoff: float = -1, 
+                 heuristic_operation: str = 'median', 
+                 is_auto_adjust_gamma: bool = False, 
+                 is_dimension_median_heuristic: bool = True, 
+                 opt_bandwidth: bool = False, 
+                 kernel_computation_type: str = "quadratic"):
+        
+        super().__init__()
         
         self.distance_module = distance_module
         
@@ -77,16 +157,6 @@ class BaseKernel(torch.nn.Module, metaclass=abc.ABCMeta):
         # end if
 
         self.__stack_bandwidth = []
-
-    @classmethod
-    @abc.abstractmethod
-    def from_dataset(cls, dataset: BaseDataset) -> "BaseKernel":
-        """Public API method to create a kernel object from a dataset.
-        
-        Must be implemented in a subclass.
-        """
-        raise NotImplementedError()
-    
 
     def reset_variables(self):
         self.__stack_bandwidth = []
@@ -305,55 +375,3 @@ class BaseKernel(torch.nn.Module, metaclass=abc.ABCMeta):
             return self._compute_kernel_matrix_dim(x, y, bandwidth)
         else:
             return self._compute_kernel_matrix_single(x, y, bandwidth)
-
-    # --------------------------------------------------------------------------------------------------
-    # methods to be implemented.
-    # private methods
-
-    @abc.abstractmethod
-    def _get_median_single(self,
-                           x: torch.Tensor,
-                           y: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _get_median_dim(self,
-                        x: torch.Tensor,
-                        y: torch.Tensor) -> typing.Optional[torch.Tensor]:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _compute_kernel_matrix_single(self,
-                                      x: torch.Tensor,
-                                      y: torch.Tensor,
-                                      bandwidth: typing.Optional[torch.Tensor]) -> KernelMatrixObject:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _compute_kernel_matrix_dim(self,
-                                   x: torch.Tensor,
-                                   y: torch.Tensor,
-                                   bandwidth: typing.Optional[torch.Tensor]) -> KernelMatrixObject:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _get_trainable_parameters(self) -> typing.List[torch.nn.Parameter]:
-        """An abstract method that returns a list of trainable parameters.
-
-        :return:
-        """
-        raise NotImplementedError()
-    
-    # -----------------------------------------------------------------------------    
-    # methods to be implemented.
-    # public API methods
-
-    @abc.abstractmethod
-    def get_hyperparameters(self) -> typing.Dict[str, typing.Any]:
-        """A method to return a dictionary of hyperparameters.
-
-        :return:
-        """
-        raise NotImplementedError()
-
-# -----------------------------------------------------------------------------
