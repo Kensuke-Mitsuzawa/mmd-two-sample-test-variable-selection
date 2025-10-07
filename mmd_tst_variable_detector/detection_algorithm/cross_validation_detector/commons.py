@@ -222,6 +222,7 @@ class CrossValidationTrainedParameter:
     training_parameters: ty.Optional[CrossValidationTrainParameters] = None
     seq_aggregation_results: ty.Optional[ty.List[AggregationResultContainer]] = None # I use this field only when weighting_mode is `all`.
     seq_sub_estimators: ty.Optional[ty.List[SubEstimatorResultContainer]] = None
+    lambda_labels: ty.Optional[ty.List[str]] = None  # a list of lambda labels
     
     def to_dict(self):
         """Making this object serializable.

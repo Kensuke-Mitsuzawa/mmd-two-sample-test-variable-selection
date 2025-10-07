@@ -456,7 +456,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 variable_detection_postprocess_hard=None,
                 execution_time_statistics=exec_time_stats,
                 seq_aggregation_results=seq_agg_containers,
-                training_parameters=self.training_parameter
+                training_parameters=self.training_parameter,
+                lambda_labels=cv_aggregated.lambda_labels
             )
         elif cv_aggregated.stable_s_hat is not None and len(cv_aggregated.stable_s_hat) > 0:
             # training post-process estimators
@@ -466,7 +467,9 @@ class CrossValidationInterpretableVariableDetector(object):
                 ss_trained_parameter_post_hard = ss_trained_parameter_post_soft = None
             # end if
             
+            assert cv_aggregated.array_s_hat is not None
             assert isinstance(cv_aggregated.array_s_hat, torch.Tensor)
+            assert cv_aggregated.stability_score_matrix is not None
             assert isinstance(cv_aggregated.stability_score_matrix, torch.Tensor)
             ss_trained_parameter = CrossValidationTrainedParameter(
                 regularization=self.candidate_regularization_parameter,
@@ -478,7 +481,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 execution_time_statistics=exec_time_stats,
                 seq_aggregation_results=seq_agg_containers,
                 training_parameters=self.training_parameter,
-                seq_sub_estimators=seq_sub_estimator_container)
+                seq_sub_estimators=seq_sub_estimator_container,
+                lambda_labels=cv_aggregated.lambda_labels)
         else:
             msg = 'No variable are detected. `cv_aggregated.stable_s_hat` is an empty list.'
             raise SameDataException(msg)
