@@ -35,8 +35,11 @@ class RamBackendStaticDataset(BaseRamBackendDataset, BaseStaticDataset, BaseSamp
         self.data_format_y = self.__check_data_form(y)
         self.variable_label = variable_label
 
-        assert len(x) == len(y), f'Not equal sample numbers. N(X)={len(x)} N(Y)={len(y)}'
-        self.n_sample = len(x)
+        # TODO
+        # assert len(x) == len(y), f'Not equal sample numbers. N(X)={len(x)} N(Y)={len(y)}'
+
+        self.n_sample_x = len(x)
+        self.n_sample_y = len(y)
 
         self._dimension_x = self.__get_dimensions(x, self.data_format_x)
         self._dimension_y = self.__get_dimensions(y, self.data_format_y)
@@ -48,15 +51,18 @@ class RamBackendStaticDataset(BaseRamBackendDataset, BaseStaticDataset, BaseSamp
         pass
 
     def __getitem__(self, idx: int) -> ty.Tuple[torch.Tensor, torch.Tensor]:
+        idx_x = idx % self.n_sample_x
+        idx_y = idx % self.n_sample_y
+
         if self.data_format_x == 'vector':
-            __x = self._x[idx]
+            __x = self._x[idx_x]
         elif self.data_format_x == 'matrix':
             __x = self.flatten_matrix_to_vector(self._x[idx])
         else:
             raise NotImplementedError()
 
         if self.data_format_y == 'vector':
-            __y = self._y[idx]
+            __y = self._y[idx_y]
         elif self.data_format_y == 'matrix':
             __y = self.flatten_matrix_to_vector(self._y[idx])
         else:
@@ -65,10 +71,11 @@ class RamBackendStaticDataset(BaseRamBackendDataset, BaseStaticDataset, BaseSamp
         return __x, __y
 
     def __len__(self) -> int:
-        return self.n_sample
+        # The length of the dataset is the maximum of the two sample sizes.
+        return max(self.n_sample_x, self.n_sample_y)
 
     def get_all_samples(self) -> ty.Tuple[torch.Tensor, torch.Tensor]:
-        __seq_t_xy = [self.__getitem__(__i) for __i in range(self.n_sample)]
+        __seq_t_xy = [self.__getitem__(__i) for __i in range(len(self))]
         __seq_x = torch.stack([t[0] for t in __seq_t_xy])
         __seq_y = torch.stack([t[1] for t in __seq_t_xy])
 
