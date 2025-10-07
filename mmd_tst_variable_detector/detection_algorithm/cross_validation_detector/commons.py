@@ -90,7 +90,7 @@ class CrossValidationAlgorithmParameter(object):
     # By doing that, we can cut off MMD estimators of which detection results were not good.
     # See: https://github.com/Kensuke-Mitsuzawa/mmd-tst-variable-detector/issues/394
     pre_filtering_trained_estimator: str = 'off'
-    pre_filtering_parameter: ty.Union[int, float] = 0.3
+    pre_filtering_parameter: ty.Union[int, float] = 1.0
 
     def __post_init__(self):
         assert self.approach_regularization_parameter in APPROACH_REGULARIZATION_PARAMETER
