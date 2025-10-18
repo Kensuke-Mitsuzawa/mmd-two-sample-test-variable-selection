@@ -9,7 +9,7 @@ from pytorch_lightning.accelerators.accelerator import Accelerator
 from pytorch_lightning.strategies import ParallelStrategy, Strategy
 from pytorch_lightning.loggers import Logger
 from pytorch_lightning.callbacks import Callback, Checkpoint, EarlyStopping, ProgressBar
-from pytorch_lightning.plugins import PLUGIN_INPUT
+# from pytorch_lightning.plugins import PLUGIN_INPUT
 
 # from mmd_tst_variable_detector.utils.early_stopping import DefaultEarlyStoppingRule
 
@@ -52,7 +52,7 @@ class PytorchLightningDefaultArguments:
     profiler: Optional[str] = None
     detect_anomaly: bool = False
     barebones: bool = False
-    plugins: Optional[Union[PLUGIN_INPUT, List[PLUGIN_INPUT]]] = None
+    plugins = None
     sync_batchnorm: bool = False
     reload_dataloaders_every_n_epochs: int = 0
     default_root_dir: Optional[Path] = None

@@ -181,18 +181,18 @@ class CrossValidationInterpretableVariableDetector(object):
                  validation_dataset: ty.Optional[str] = None,
                  trainer_lightning: ty.Optional[pl.Trainer] = None,
                  seed_root_random: int = 42,
-                 dask_client: ty.Optional[Client] = None):
+                 dask_client: ty.Optional[Client] = None,
+                 is_optimisation_after_variable_selection: bool = True):
         """
-        
         Parameters
         -------------------
-        
-        pytorch_trainer_config: PytorchLightningDefaultArguments. Parameter for Pytorch Lightning Trainer.
-        training_parameter: CrossValidationTrainParameters
-        estimator: BaseMmdEstimator
-        post_process_handler: ty.Optional[PostProcessLoggerHandler]
-        resume_checkpoint_saver : typing.Optional[CheckPointSaverStabilitySelection]
-            A Checkpoint handler saves the optimized results. The handler helps you resume the CV-Detection. 
+            pytorch_trainer_config: PytorchLightningDefaultArguments. Parameter for Pytorch Lightning Trainer.
+            training_parameter: CrossValidationTrainParameters
+            estimator: BaseMmdEstimator
+            post_process_handler: ty.Optional[PostProcessLoggerHandler]
+            resume_checkpoint_saver : typing.Optional[CheckPointSaverStabilitySelection]
+                A Checkpoint handler saves the optimized results. The handler helps you resume the CV-Detection.
+            is_optimisation_after_variable_selection: True, then do optimization of MMD estimator after the variable selection, else Not.
         """
         self.dask_client = dask_client
 
@@ -250,6 +250,8 @@ class CrossValidationInterpretableVariableDetector(object):
             training_parameter=self.training_parameter,
             post_process_handler=self.post_process_handler,
             cv_detection_experiment_name=self.cv_detection_experiment_name)
+        
+        self.is_optimisation_after_variable_selection = is_optimisation_after_variable_selection
 
     def run_stability_selection(self):
         """This function is just for keeping the version interchangeability.
@@ -454,13 +456,20 @@ class CrossValidationInterpretableVariableDetector(object):
                 variable_detection_postprocess_hard=None,
                 execution_time_statistics=exec_time_stats,
                 seq_aggregation_results=seq_agg_containers,
-                training_parameters=self.training_parameter
+                training_parameters=self.training_parameter,
+                lambda_labels=cv_aggregated.lambda_labels
             )
         elif cv_aggregated.stable_s_hat is not None and len(cv_aggregated.stable_s_hat) > 0:
             # training post-process estimators
-            ss_trained_parameter_post_hard, ss_trained_parameter_post_soft = self.train_post_mmd_estimators(cv_aggregated)
+            if self.is_optimisation_after_variable_selection:
+                ss_trained_parameter_post_hard, ss_trained_parameter_post_soft = self.train_post_mmd_estimators(cv_aggregated)
+            else:
+                ss_trained_parameter_post_hard = ss_trained_parameter_post_soft = None
+            # end if
             
+            assert cv_aggregated.array_s_hat is not None
             assert isinstance(cv_aggregated.array_s_hat, torch.Tensor)
+            assert cv_aggregated.stability_score_matrix is not None
             assert isinstance(cv_aggregated.stability_score_matrix, torch.Tensor)
             ss_trained_parameter = CrossValidationTrainedParameter(
                 regularization=self.candidate_regularization_parameter,
@@ -472,7 +481,8 @@ class CrossValidationInterpretableVariableDetector(object):
                 execution_time_statistics=exec_time_stats,
                 seq_aggregation_results=seq_agg_containers,
                 training_parameters=self.training_parameter,
-                seq_sub_estimators=seq_sub_estimator_container)
+                seq_sub_estimators=seq_sub_estimator_container,
+                lambda_labels=cv_aggregated.lambda_labels)
         else:
             msg = 'No variable are detected. `cv_aggregated.stable_s_hat` is an empty list.'
             raise SameDataException(msg)

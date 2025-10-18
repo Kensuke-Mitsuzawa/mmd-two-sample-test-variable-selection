@@ -4,7 +4,7 @@ import torch
 from torch.cuda.amp import custom_bwd, custom_fwd
 
 from ..datasets.base import BaseDataset
-from .base import BaseKernel, KernelMatrixObject
+from .base import BaseKernelLengthScaleSettings, KernelMatrixObject
 from .commons import QuadraticKernelMatrixContainer
 from .utils import distance_over_3rd_reshape_same_data, distance_over_3rd_reshape_xy_data
 from ..distance_module import L2Distance
@@ -36,7 +36,7 @@ def dclamp(input, min, max):
     return DifferentiableClamp.apply(input, min, max)
 
 
-class QuadraticKronekerDeltaKernel(BaseKernel):
+class QuadraticKronekerDeltaKernel(BaseKernelLengthScaleSettings):
     def __init__(self, ard_weights: torch.Tensor):
         super().__init__(
             distance_module=L2Distance(coordinate_size=1),

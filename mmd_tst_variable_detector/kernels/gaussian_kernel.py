@@ -2,7 +2,9 @@ import typing
 import logging
 
 import torch
+import torch.utils.data
 import numpy as np
+from torch.nn import Parameter
 from sklearn.metrics.pairwise import euclidean_distances
 
 from distributed import Client
@@ -11,13 +13,15 @@ from ..datasets.base import BaseDataset
 
 from ..distance_module.base import BaseDistanceModule
 from ..distance_module.l2_distance import L2Distance, DistanceContainer
-from .base import (BaseKernel, KernelMatrixObject)
+from .base import (BaseKernelLengthScaleSettings, KernelMatrixObject)
 from .commons import (QuadraticKernelMatrixContainer, LinearKernelMatrixContainer)
 from . import utils
 from .. import logger_unit
 
+
 logger = logging.getLogger(f'{__package__}.{__name__}')
 logger.addHandler(logger_unit.handler)
+
 
 
 class DistributedFunctionArg(typing.NamedTuple):
@@ -68,7 +72,8 @@ def compute_length_scale_dataset_dimension_d(args: DistributedFunctionArg) -> ty
 
 
 
-class QuadraticKernelGaussianKernel(BaseKernel):
+
+class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
     def __init__(self,
                  distance_module: BaseDistanceModule = L2Distance(coordinate_size=1),
                  bandwidth: typing.Optional[torch.Tensor] = None,

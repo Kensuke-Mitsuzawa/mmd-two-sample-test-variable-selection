@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import typing as ty
@@ -46,7 +46,7 @@ class ResourceConfigArgs:
     train_accelerator: str = 'cpu'
     
     # Distributed backend configurations    
-    distributed_config_detection: DistributedConfigArgs = DistributedConfigArgs()
+    distributed_config_detection: DistributedConfigArgs = field(default_factory=lambda: DistributedConfigArgs())
     
     def __post_init__(self):        
         if self.path_work_dir is None:

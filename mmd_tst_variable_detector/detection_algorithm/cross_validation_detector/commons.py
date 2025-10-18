@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ...datasets import BaseDataset
 from ...logger_unit import handler
@@ -69,7 +69,7 @@ class DistributedComputingParameter:
 class CrossValidationAlgorithmParameter(object):
     approach_regularization_parameter: str = "fixed_range"
     candidate_regularization_parameter: ty.Union[str, ty.List[RegularizationParameter]] = "auto"
-    regularization_search_parameter: RegularizationSearchParameters = RegularizationSearchParameters()
+    regularization_search_parameter: RegularizationSearchParameters = field(default_factory=lambda: RegularizationSearchParameters())
     n_subsampling: int = 5  # number of subsampling, this is K-fold when sampling_strategy is "fold-cross-validation"
     sampling_strategy: str = 'cross-validation'  # "subsampling", "bootstrap", "cross-validation", "fold-cross-validation"
     ratio_subsampling: float = 0.8  # ratio to training data for cross-validation mode.
@@ -90,7 +90,7 @@ class CrossValidationAlgorithmParameter(object):
     # By doing that, we can cut off MMD estimators of which detection results were not good.
     # See: https://github.com/Kensuke-Mitsuzawa/mmd-tst-variable-detector/issues/394
     pre_filtering_trained_estimator: str = 'off'
-    pre_filtering_parameter: ty.Union[int, float] = 0.3
+    pre_filtering_parameter: ty.Union[int, float] = 1.0
 
     def __post_init__(self):
         assert self.approach_regularization_parameter in APPROACH_REGULARIZATION_PARAMETER
@@ -222,6 +222,7 @@ class CrossValidationTrainedParameter:
     training_parameters: ty.Optional[CrossValidationTrainParameters] = None
     seq_aggregation_results: ty.Optional[ty.List[AggregationResultContainer]] = None # I use this field only when weighting_mode is `all`.
     seq_sub_estimators: ty.Optional[ty.List[SubEstimatorResultContainer]] = None
+    lambda_labels: ty.Optional[ty.List[str]] = None  # a list of lambda labels
     
     def to_dict(self):
         """Making this object serializable.
