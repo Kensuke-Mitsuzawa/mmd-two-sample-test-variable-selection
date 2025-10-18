@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ...datasets import BaseDataset
 from ...logger_unit import handler
@@ -69,7 +69,7 @@ class DistributedComputingParameter:
 class CrossValidationAlgorithmParameter(object):
     approach_regularization_parameter: str = "fixed_range"
     candidate_regularization_parameter: ty.Union[str, ty.List[RegularizationParameter]] = "auto"
-    regularization_search_parameter: RegularizationSearchParameters = RegularizationSearchParameters()
+    regularization_search_parameter: RegularizationSearchParameters = field(default_factory=lambda: RegularizationSearchParameters())
     n_subsampling: int = 5  # number of subsampling, this is K-fold when sampling_strategy is "fold-cross-validation"
     sampling_strategy: str = 'cross-validation'  # "subsampling", "bootstrap", "cross-validation", "fold-cross-validation"
     ratio_subsampling: float = 0.8  # ratio to training data for cross-validation mode.

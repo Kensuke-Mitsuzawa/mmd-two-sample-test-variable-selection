@@ -1,5 +1,5 @@
 import typing as ty
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
@@ -45,7 +45,7 @@ class BaselineMmdConfigArgs:
     test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
     n_permutation_test: int = 1000
     
-    mmd_estimator_config: MmdEstimatorConfig = MmdEstimatorConfig()
+    mmd_estimator_config: MmdEstimatorConfig = field(default_factory=lambda: MmdEstimatorConfig())
 
     # dataloader parameter
     dataloader_n_workers_train_dataloader: int = 0
@@ -79,15 +79,15 @@ class CvSelectionConfigArgs:
     
     n_subsampling: int = 5
     
-    mmd_estimator_config: MmdEstimatorConfig = MmdEstimatorConfig()
+    mmd_estimator_config: MmdEstimatorConfig = field(default_factory=lambda: MmdEstimatorConfig())
     
     # lambda search parameter
     approach_regularization_parameter: str = 'param_searching'
 
-    parameter_search_parameter : RegularizationSearchParameters = RegularizationSearchParameters(
+    parameter_search_parameter : RegularizationSearchParameters = field(default_factory=lambda: RegularizationSearchParameters(
         n_search_iteration=10,
         max_concurrent_job=3,
-        n_regularization_parameter=6)
+        n_regularization_parameter=6))
 
     # distance function used for permutation test
     test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
@@ -125,7 +125,7 @@ class AlgorithmOneConfigArgs:
     max_epoch: int = 9999
     batch_size: int = -1
     
-    mmd_estimator_config: MmdEstimatorConfig = MmdEstimatorConfig()
+    mmd_estimator_config: MmdEstimatorConfig = field(default_factory=lambda: MmdEstimatorConfig())
         
     # lambda search parameter
     approach_regularization_parameter: str = 'search_objective_based'
@@ -133,10 +133,10 @@ class AlgorithmOneConfigArgs:
     # a ratio to split the dataset into train and dev
     train_dev_split_ratio: float = 0.8
 
-    parameter_search_parameter : RegularizationSearchParameters = RegularizationSearchParameters(
+    parameter_search_parameter : RegularizationSearchParameters = field(default_factory=lambda: RegularizationSearchParameters(
         n_search_iteration=10,
         max_concurrent_job=3,
-        n_regularization_parameter=6)
+        n_regularization_parameter=6))
     
     # distance function used for permutation test
     test_distance_functions: ty.Union[ty.Tuple[str, ...], ty.List[str]] = ('sliced_wasserstein',)
