@@ -49,7 +49,7 @@ trendfilter = "^0.2.1"
 xarray = "^2024.1.1"
 pandera = "^0.18.3"
 toml = "^0.10.2"
-openpyxl = "^3.1.5"
+openpyxl = "*"
 geomloss = "^0.2.6"
 gputil = "^1.4.0"
 
