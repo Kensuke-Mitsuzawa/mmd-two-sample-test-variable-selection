@@ -6541,6 +6541,21 @@ tomli = {version = ">=1", markers = "python_version < \"3.11\""}
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pytest-resource-path"
+version = "1.4.1"
+description = "Provides path for uniform access to test resources in isolated directory"
+optional = false
+python-versions = ">=3.7"
+groups = ["test"]
+files = [
+    {file = "pytest_resource_path-1.4.1-py3-none-any.whl", hash = "sha256:a6ac94b3aac839d4cb850e0891100b0d28811236ebb7d9e9b98cda15098542e1"},
+    {file = "pytest_resource_path-1.4.1.tar.gz", hash = "sha256:ee17e25e059ef622c376a85a0ae2cfbe32a4e0a267c7266dde78bab4c0a05e90"},
+]
+
+[package.dependencies]
+pytest = ">=3.5.0"
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 description = "Extensions to the standard Python datetime module"
@@ -8933,4 +8948,4 @@ experiment-compare = ["future"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "4597fe6c5c52e100ef2ab60daab33b59e325006e3d2a7a13b4b6270b246daaae"
+content-hash = "bc029f7bf8544ca143a04f321323d6a6bc9a9411bf02356409cec6b567c55413"

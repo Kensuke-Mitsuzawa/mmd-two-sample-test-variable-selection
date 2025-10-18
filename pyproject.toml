@@ -11,6 +11,7 @@ packages = [
 
 [tool.poetry.group.test.dependencies]
 pytest = "*"
+pytest-resource-path = "^1.4.1"
 
 [tool.poetry.dependencies]
 python = "^3.9"
