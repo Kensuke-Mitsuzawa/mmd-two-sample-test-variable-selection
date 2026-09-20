@@ -1,7 +1,10 @@
+import os
 from pathlib import Path
 import toml
 import functools
 import shutil
+
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 
 import torch
 import pytorch_lightning as pl

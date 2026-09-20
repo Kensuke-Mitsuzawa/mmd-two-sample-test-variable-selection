@@ -1,5 +1,8 @@
+import os
 import typing as ty
 from pathlib import Path
+
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 from tempfile import mkdtemp
 import shutil
 import json
