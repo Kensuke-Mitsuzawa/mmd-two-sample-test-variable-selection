@@ -1,7 +1,13 @@
 import typing as ty
 
 import torch
-from torch.cuda.amp import custom_bwd, custom_fwd
+
+if hasattr(torch, "amp") and hasattr(torch.amp, "custom_fwd"):
+    _custom_fwd = torch.amp.custom_fwd(device_type="cuda")
+    _custom_bwd = torch.amp.custom_bwd(device_type="cuda")
+else:
+    from torch.cuda.amp import custom_bwd as _custom_bwd, custom_fwd as _custom_fwd
+# end if
 
 from ..datasets.base import BaseDataset
 from .base import BaseKernelLengthScaleSettings, KernelMatrixObject
@@ -16,14 +22,15 @@ class DifferentiableClamp(torch.autograd.Function):
     """
 
     @staticmethod
-    @custom_fwd
+    @_custom_fwd
     def forward(ctx, input, min, max):
         return input.clamp(min=min, max=max)
 
     @staticmethod
-    @custom_bwd
+    @_custom_bwd
     def backward(ctx, grad_output):
         return grad_output.clone(), None, None
+
 
 
 def dclamp(input, min, max):
