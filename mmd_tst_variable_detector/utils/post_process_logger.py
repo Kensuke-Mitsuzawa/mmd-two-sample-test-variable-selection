@@ -197,7 +197,7 @@ class PostProcessLoggerHandler(object):
         self.loggers = loggers
         self.logger2config = logger2config
         for __logger in self.loggers:
-            assert __logger in ("mlflow", "tensorboard", "wandb", "csv"), f"logger {__logger} is not supported."
+            assert __logger in ("mlflow", "tensorboard", "csv"), f"logger {__logger} is not supported."
             assert __logger in logger2config, f"In logger2config, you have to define configuration for logger {__logger}."
         # end for
         
@@ -490,11 +490,6 @@ class PostProcessLoggerHandler(object):
             elif __logger == "tensorboard":
                 __l = pytorch_lightning.loggers.TensorBoardLogger(
                     name=run_name,
-                    **logger_default_config)
-            elif __logger == "wandb":
-                __l = pytorch_lightning.loggers.WandbLogger(
-                    name=run_name,
-                    project=group_name,
                     **logger_default_config)
             elif __logger == "csv":
                 __l = pytorch_lightning.loggers.CSVLogger(

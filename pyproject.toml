@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mmd_tst_variable_detector"
-version = "1.5"
+version = "1.6.0"
 description = ""
 authors = ["Kensuke-Mitsuzawa <kensuke.mit@gmail.com>"]
 readme = "README.md"

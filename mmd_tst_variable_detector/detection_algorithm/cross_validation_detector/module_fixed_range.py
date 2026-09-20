@@ -38,6 +38,7 @@ from .commons import (
 from .module_data_sampling import DataSampling
 
 from .module_utils import dask_worker_script
+from ...accelerator_optimizations import create_task_dispatcher
 from ...logger_unit import handler
 
 
@@ -104,72 +105,38 @@ class SubModuleCrossValidationFixedRange(object):
                 logger.warning(f'Failed to log post-process results. I skip logging {e}')
         # end for
     
+    def _dispatch_tasks(self,
+                        seq_task_arguments: ty.List[RequestDistributedFunction]
+                        ) -> ty.List[SubLearnerTrainingResult]:
+        """Unified task dispatch method delegating to the configured BaseTaskDispatcher."""
+        accelerator = getattr(self.pytorch_trainer_config, "accelerator", "cpu")
+        mode = getattr(self.training_parameter, "computation_backend", None)
+        if mode is None:
+            mode = "dask" if self.dask_client is not None else "single"
+        dispatcher = create_task_dispatcher(
+            train_accelerator=accelerator if isinstance(accelerator, str) else "cpu",
+            distributed_mode=mode,
+            dask_client=self.dask_client,
+            dask_scheduler_address=getattr(self.training_parameter.distributed_parameter, "dask_scheduler_address", None),
+            batch_size=self.training_parameter.distributed_parameter.job_batch_size,
+            resume_checkpoint_saver=self.resume_checkpoint_saver,
+            post_process_handler=self.post_process_handler,
+            cv_experiment_name=self.cv_detection_experiment_name,
+        )
+        return dispatcher.dispatch(seq_task_arguments)
+
     def __non_distributed_single_backend(self,
                                          seq_task_arguments: ty.List[RequestDistributedFunction]
                                          ) -> ty.List[SubLearnerTrainingResult]:
-        """
-        :return:
-        """
-        # seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
+        """Backward-compatible alias for single-node dispatch."""
+        return self._dispatch_tasks(seq_task_arguments)
 
-        batch_n = self.training_parameter.distributed_parameter.job_batch_size
-        seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
-
-        seq_results = []
-        for on_job_batch in seq_batch:
-            __seq_results_one_batch = []
-            for args in on_job_batch:
-                __seq_results_one_batch.append(dask_worker_script(args))
-            # end for
-            seq_results += __seq_results_one_batch
-            # save opt results
-            if self.resume_checkpoint_saver is not None:
-                for sub_learner_result in __seq_results_one_batch:
-                    self.resume_checkpoint_saver.save_checkpoint(sub_learner_result)
-            # end if
-            
-            if self.post_process_handler is not None:
-                logger.debug('logging post-process results...')
-                self.__log_post_process(__seq_results_one_batch)
-                logger.debug('logging Done')
-            # end if
-        # end for
-
-        return seq_results
-    
     def __distributed_dask_backend(self,
                                    seq_task_arguments: ty.List[RequestDistributedFunction]
-                                #    sub_id_tuple: ty.List[ty.Tuple[RegularizationParameter, int]]
                                    ) -> ty.List[SubLearnerTrainingResult]:
-        # seq_task_arguments = self.__generate_distributed_argument(sub_id_tuple)
+        """Backward-compatible alias for dask-based dispatch."""
+        return self._dispatch_tasks(seq_task_arguments)
 
-        batch_n = self.training_parameter.distributed_parameter.job_batch_size
-        seq_batch = [seq_task_arguments[i * batch_n:(i + 1) * batch_n] for i in range((len(seq_task_arguments) + batch_n - 1) // batch_n)]
-
-        # client = Client(self.training_parameter.distributed_parameter.dask_scheduler_address)
-        client = self.dask_client
-        assert client is not None, 'Dask client is not given.'
-        assert isinstance(client, Client), 'Dask client is not given.'
-        seq_results = []
-        for on_job_batch in seq_batch:
-            task_queue = client.map(dask_worker_script, on_job_batch)
-            __seq_results: ty.List[SubLearnerTrainingResult] = client.gather(task_queue)  # type: ignore
-            seq_results += __seq_results
-
-            # save opt results
-            if self.resume_checkpoint_saver is not None:
-                for sub_learner_result in __seq_results:
-                    self.resume_checkpoint_saver.save_checkpoint(sub_learner_result)
-            # end if
-
-            if self.post_process_handler is not None:
-                logger.debug('logging post-process results...')
-                self.__log_post_process(__seq_results)
-                logger.debug('logging Done')
-            # end if
-            
-        return seq_results    
-    
     def run_sub_learners_lambda_parameter(self,
                                           seq_job_function_parameter: ty.List[RequestDistributedFunction],
                                           trained_function_return_done: ty.List[SubLearnerTrainingResult]
@@ -177,7 +144,6 @@ class SubModuleCrossValidationFixedRange(object):
         """Public method.
 
         Run sub-learners with a regularization parameter. A controller of joblib or dask job scheduler.
-
         "job-id" consists of "LambdaParam-SubsamplingID".
 
         Parameters
@@ -189,22 +155,7 @@ class SubModuleCrossValidationFixedRange(object):
         --------------
         a list of `SubLearnerTrainingResult`
         """
-
-        # if self.training_parameter.computation_backend == 'single':
-        #     trained_function_return_done += self.__non_distributed_single_backend(seq_job_function_parameter)
-        # elif self.training_parameter.computation_backend == 'joblib':
-        #     trained_function_return_done += self.__distributed_joblib_backend(seq_job_function_parameter)
-        # elif self.training_parameter.computation_backend == 'dask':
-        #     trained_function_return_done += self.__distributed_dask_backend(seq_job_function_parameter)
-        # else:
-        #     raise NotImplementedError(f'No backend named {self.training_parameter.computation_backend}')
-        # # end if
-        if self.dask_client is None:
-            trained_function_return_done += self.__non_distributed_single_backend(seq_job_function_parameter)
-        else:
-            trained_function_return_done += self.__distributed_dask_backend(seq_job_function_parameter)
-        # end if
-        
+        trained_function_return_done += self._dispatch_tasks(seq_job_function_parameter)
         return trained_function_return_done    
     
     def __generate_distributed_argument(self, 
