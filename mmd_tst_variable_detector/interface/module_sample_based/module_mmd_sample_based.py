@@ -18,6 +18,7 @@ from ...datasets.file_onetime_load_backend_static_dataset import FileBackendOneT
 from ...mmd_estimator import QuadraticMmdEstimator
 from ...kernels.gaussian_kernel import QuadraticKernelGaussianKernel
 from ...distance_module import L2Distance
+from ...detection_algorithm.base import BaseVariableDetector
 from ...detection_algorithm.cross_validation_detector import (
     CrossValidationInterpretableVariableDetector,
     CrossValidationTrainedParameter,
@@ -33,9 +34,17 @@ from ..interface_config_args import (
     InterfaceConfigArgs
 )
 # Algorithm one
-from ...detection_algorithm import detection_algorithm_one, AlgorithmOneResult
+from ...detection_algorithm import (
+    detection_algorithm_one, 
+    AlgorithmOneResult,
+    AlgorithmOneVariableDetector,
+)
 # mmd baseline
-from ...detection_algorithm.baseline_mmd import BaselineMmdResult, baseline_mmd
+from ...detection_algorithm.baseline_mmd import (
+    BaselineMmdResult, 
+    baseline_mmd,
+    BaselineMmdVariableDetector,
+)
 
 from .. import data_objects
 
@@ -184,6 +193,7 @@ def __main_run(dataset_train: BaseDataset,
             }})
     
     
+    detector: BaseVariableDetector
     if isinstance(mmd_config_args, CvSelectionConfigArgs):
         detector = CrossValidationInterpretableVariableDetector(
             pytorch_trainer_config=pl_param,
@@ -192,7 +202,7 @@ def __main_run(dataset_train: BaseDataset,
             post_process_handler=post_process_handler,
             seed_root_random=seed_root_random,
             dask_client=dask_client)
-        res = detector.run_cv_detection(dataset_train)
+        res = detector.run_detection(dataset_train)
     elif isinstance(mmd_config_args, AlgorithmOneConfigArgs):
         # comment: I take `cv_config` for common.
         logger.debug('Running Algorithm One...')
@@ -205,32 +215,34 @@ def __main_run(dataset_train: BaseDataset,
         __data_dev = data_split_obj.test_dataset
         
         __regularization_search_parameter = mmd_config_args.parameter_search_parameter
-        res = detection_algorithm_one(
-            dataset_training=__data_train,
-            dataset_dev=__data_dev,
-            mmd_estimator=mmd_estimator,
+        detector = AlgorithmOneVariableDetector(
+            estimator=mmd_estimator,
             base_training_parameter=cv_train_param.base_training_parameter,
             pytorch_trainer_config=pl_param,
-            post_process_handler=post_process_handler,
-            regularization_search_parameter=__regularization_search_parameter,
             candidate_regularization_parameters=mmd_config_args.approach_regularization_parameter,
+            regularization_search_parameter=__regularization_search_parameter,
+            dask_client=dask_client,
+            post_process_handler=post_process_handler,
             test_distance_functions=tuple(mmd_config_args.test_distance_functions),
-            n_permutation_test=mmd_config_args.n_permutation_test,
-            dask_client=dask_client)
+            n_permutation_test=mmd_config_args.n_permutation_test)
+        res = detector.run_detection(
+            training_dataset=__data_train,
+            validation_dataset=__data_dev)
     elif isinstance(mmd_config_args, BaselineMmdConfigArgs):
-        res = baseline_mmd(
-            mmd_estimator=mmd_estimator,
+        detector = BaselineMmdVariableDetector(
+            estimator=mmd_estimator,
+            training_parameter=cv_train_param.base_training_parameter,
             pytorch_trainer_config=pl_param,
-            base_training_parameter=cv_train_param.base_training_parameter,
-            dataset_training=dataset_train,
             dataset_test=None,
             path_work_dir=path_dir_model,
             post_process_handler=post_process_handler)
+        res = detector.run_detection(
+            training_dataset=dataset_train)
     else:
         raise ValueError(f'Unexpected mmd_config_args type: {type(mmd_config_args)}')
     # end if
     
-    return res
+    return res, detector
 
 
 def main(config_args: InterfaceConfigArgs,
@@ -251,7 +263,7 @@ def main(config_args: InterfaceConfigArgs,
     path_dir_model = path_resource_root / config_args.resource_config_args.dir_name_model
     path_dir_ml_logger = path_resource_root / config_args.resource_config_args.dir_name_ml_logger
     
-    res = __main_run(
+    res, detector = __main_run(
         dataset_train, 
         training_conf_args=config_args,
         path_dir_model=path_dir_model,
@@ -303,4 +315,5 @@ def main(config_args: InterfaceConfigArgs,
         p_value=__p_max,
         verbose_field=res,
         n_sample_training=n_sample_training,
-        n_sample_test=n_sample_test)
+        n_sample_test=n_sample_test,
+        detector=detector)

@@ -24,6 +24,7 @@ from ...datasets.base import BaseDataset
 from ...mmd_estimator.mmd_estimator import BaseMmdEstimator
 from ...utils.post_process_logger import PostProcessLoggerHandler
 
+from ..base import BaseVariableDetector
 from ..interpretable_mmd_detector import InterpretableMmdDetector
 from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments 
 from ..commons import (
@@ -170,7 +171,7 @@ def post_ard_weight_optimization_soft(score_aggregated: CrossValidationAggregate
 
 
 
-class CrossValidationInterpretableVariableDetector(object):
+class CrossValidationInterpretableVariableDetector(BaseVariableDetector):
     def __init__(self,
                  pytorch_trainer_config: PytorchLightningDefaultArguments,
                  training_parameter: CrossValidationTrainParameters,
@@ -182,7 +183,8 @@ class CrossValidationInterpretableVariableDetector(object):
                  trainer_lightning: ty.Optional[pl.Trainer] = None,
                  seed_root_random: int = 42,
                  dask_client: ty.Optional[Client] = None,
-                 is_optimisation_after_variable_selection: bool = True):
+                 is_optimisation_after_variable_selection: bool = True,
+                 **kwargs: ty.Any):
         """
         Parameters
         -------------------
@@ -194,7 +196,13 @@ class CrossValidationInterpretableVariableDetector(object):
                 A Checkpoint handler saves the optimized results. The handler helps you resume the CV-Detection.
             is_optimisation_after_variable_selection: True, then do optimization of MMD estimator after the variable selection, else Not.
         """
-        self.dask_client = dask_client
+        super().__init__(
+            estimator=estimator,
+            pytorch_trainer_config=pytorch_trainer_config,
+            post_process_handler=post_process_handler,
+            dask_client=dask_client,
+            **kwargs,
+        )
 
         if trainer_lightning is not None:
             raise ValueError('trainer_lightning is deprecated. Give `pytorch_trainer_config` parameter object instead.')
@@ -489,10 +497,16 @@ class CrossValidationInterpretableVariableDetector(object):
         # end if
 
         return ss_trained_parameter
+    # end def
 
+    def run_detection(self,
+                      training_dataset: BaseDataset,
+                      validation_dataset: ty.Optional[BaseDataset] = None,
+                      **kwargs: ty.Any) -> CrossValidationTrainedParameter:
+        """Execute cross-validation variable detection workflow."""
+        return self.run_cv_detection(training_dataset=training_dataset, validation_dataset=validation_dataset)
+    # end def
 
-
-# ---------------------------------------------------------------------
 # class names for old package versions
 
 StabilitySelectionVariableTrainer = CrossValidationInterpretableVariableDetector

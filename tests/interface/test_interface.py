@@ -247,8 +247,16 @@ def test_ram_backend_static_dataset_sample_based_interpretable_mmd_baseline_mmd(
     assert isinstance(res_object.detection_result_sample_based.variables, list)
     assert isinstance(res_object.detection_result_sample_based.p_value, float)
     logger.debug(f'p_value={res_object.detection_result_sample_based.p_value}')
+
+    from mmd_tst_variable_detector.detection_algorithm.base import BaseVariableDetector
+    from mmd_tst_variable_detector.detection_algorithm.baseline_mmd import BaselineMmdVariableDetector
+    assert interface_instance.detector is not None
+    assert isinstance(interface_instance.detector, BaseVariableDetector)
+    assert isinstance(interface_instance.detector, BaselineMmdVariableDetector)
+
     # getting result
     shutil.rmtree(path_work_dir)
+
 
 
 

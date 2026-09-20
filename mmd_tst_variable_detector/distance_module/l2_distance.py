@@ -25,7 +25,6 @@ class L2Distance(BaseDistanceModule):
         super().__init__(data_point_shape)
     
     @staticmethod
-    @torch.jit.script  # type: ignore
     def __compute_l2_flat_vector_alpha(x: torch.Tensor, y: torch.Tensor) -> DistanceContainer:
         """Compute L2 distance between two flat vectors.
         

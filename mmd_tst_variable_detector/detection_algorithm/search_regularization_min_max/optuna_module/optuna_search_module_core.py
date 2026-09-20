@@ -21,6 +21,8 @@ from ....datasets import BaseDataset
 from ....datasets.file_onetime_load_backend_static_dataset import FileBackendOneTimeLoadStaticDataset
 from ....utils.variable_detection import detect_variables
 from ....utils import PostProcessLoggerHandler
+from ....accelerator_optimizations.factory import create_task_dispatcher
+
 
 from ....mmd_estimator.mmd_estimator import BaseMmdEstimator
 from ...interpretable_mmd_detector import InterpretableMmdDetector
@@ -217,14 +219,19 @@ def func_dask_weapper_function_optuna(seq_trial: ty.List[optuna.Trial],
         mmd_estimator=mmd_estimator,
         training_parameter=training_parameter)
 
-    if dask_client is None:
-        task_return = [__func_dask_task(__dict_param) for __dict_param in __seq_trial_parameters]
-    else:
-        logger.debug(f'Executing tasks with Dask...')    
-        task_queue = dask_client.map(__func_dask_task, __seq_trial_parameters)
-        task_return = dask_client.gather(task_queue)
-        logger.debug(f'Finished executing tasks with Dask.')
-    # end if
+    distributed_mode = "dask" if dask_client is not None else "single"
+    train_accelerator = pytorch_trainer_config.accelerator if pytorch_trainer_config.accelerator else "cpu"
+    batch_size = max(1, len(__seq_trial_parameters))
+
+    task_dispatcher = create_task_dispatcher(
+        train_accelerator=train_accelerator,
+        distributed_mode=distributed_mode,
+        dask_client=dask_client,
+        batch_size=batch_size,
+        worker_fn=__func_dask_task,
+    )
+    task_return = task_dispatcher.dispatch(__seq_trial_parameters)
+
 
     # DO it on the main thread.
     seq_return_obj = []  # object to return

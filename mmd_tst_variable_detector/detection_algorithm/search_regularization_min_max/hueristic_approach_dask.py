@@ -24,9 +24,11 @@ from ...utils.post_process_logger import PostProcessLoggerHandler
 from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments
 from ...utils.variable_detection import detect_variables
 from .optuna_module.commons import SelectionResult
+from ...accelerator_optimizations.factory import create_task_dispatcher
 from ...logger_unit import handler 
 logger = logging.getLogger(f'{__package__}.{__name__}')
 logger.addHandler(handler)
+
 
 
 def log_post_process(post_process_handler: PostProcessLoggerHandler, 
@@ -385,14 +387,19 @@ def run_parameter_space_search(
             __func_dask_run,
             pytorch_trainer_config=pytorch_trainer_config)
 
-        if dask_client is None:
-            task_return = [__func_dask_task(__dict_param) for __dict_param in __seq_trainer]
-        else:
-            logger.debug(f'Executing tasks with Dask...')    
-            task_queue = dask_client.map(__func_dask_task, __seq_trainer)
-            task_return = dask_client.gather(task_queue)
-            logger.debug(f'Finished executing tasks with Dask.')
-        # end if
+        distributed_mode = "dask" if dask_client is not None else "single"
+        train_accelerator = pytorch_trainer_config.accelerator if pytorch_trainer_config.accelerator else "cpu"
+        batch_size = max(1, len(__seq_trainer))
+
+        task_dispatcher = create_task_dispatcher(
+            train_accelerator=train_accelerator,
+            distributed_mode=distributed_mode,
+            dask_client=dask_client,
+            batch_size=batch_size,
+            worker_fn=__func_dask_task,
+        )
+        task_return = task_dispatcher.dispatch(__seq_trainer)
+
         
         # for-loop taking dask results.
         assert task_return is not None, "task_return is None."
