@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from ...datasets import BaseDataset
 from ...logger_unit import handler
 
-from ..search_regularization_min_max import RegularizationSearchParameters
+from ..search_regularization_min_max.optuna_module.commons import RegularizationSearchParameters
 
 from ..commons import (
     RegularizationParameter, 

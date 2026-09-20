@@ -38,6 +38,8 @@ from .search_regularization_min_max import (
     optuna_search, 
     heuristic_search,
     SelectionResult)
+from ..accelerator_optimizations.factory import create_task_dispatcher
+
 
 
 logger = logging.getLogger(f'{__package__}.{__name__}')
@@ -579,50 +581,42 @@ def __run_algorithm_one_min_max_param_range(
         test_distance_functions=test_distance_functions,
         n_permutation_test=n_permutation_test)
 
-    # batching function requests.
-    # when distributed system is not enough trustable, we want to split a task pooling into smaller batches.
-    # distributed_batch_size == -1, if you do not care.
-    
-    if distributed_batch_size == -1:
-        seq_batched_requests = [seq_function_request_payload]
-    else:
-        seq_batched_requests = more_itertools.batched(
-            seq_function_request_payload, distributed_batch_size
-    )
-    
-    # region: execute function requests
-    for batch_request in seq_batched_requests:
-        if dask_client is None:
-            return_obj = [__run_optimization_estimator(req) for req in batch_request]
-        else:
-            assert dask_client is not None
-            task_queue = dask_client.map(__run_optimization_estimator, batch_request)
-            return_obj = dask_client.gather(task_queue)
-        # end if
-        assert isinstance(return_obj, list)
-        
-        # post-processing distributed computing
-        for opt_result in return_obj:
-            assert isinstance(opt_result, _AlgorithmOneRangeFunctionReturn)
-            seq_optimized_mmd.append(opt_result)
-            # save a model
-            if opt_result.is_success:
-                assert opt_result.request.path_work_dir is not None
-                Path(opt_result.request.path_work_dir).mkdir(
-                    parents=True, exist_ok=True
-                )
-                path_save_model = opt_result.request.path_work_dir / "trained_model.pt"
-                torch.save(opt_result.trained_result, path_save_model)
-            # end if
+    distributed_mode = "dask" if dask_client is not None else "single"
+    train_accelerator = pytorch_trainer_config.accelerator if pytorch_trainer_config.accelerator else "cpu"
+    batch_size = distributed_batch_size if distributed_batch_size > 0 else max(1, len(seq_function_request_payload))
 
-            if post_process_handler is not None:
-                __run_name = opt_result.get_key_id()
-                __loggers = post_process_handler.initialize_logger(run_name=__run_name, group_name=detection_algorithm_one.__name__)
-                post_process_handler.log(loggers=__loggers, target_object=opt_result)
-            # end if
-        # end for
-    # endregion    
+    task_dispatcher = create_task_dispatcher(
+        train_accelerator=train_accelerator,
+        distributed_mode=distributed_mode,
+        dask_client=dask_client,
+        batch_size=batch_size,
+        worker_fn=__run_optimization_estimator,
+    )
+    return_obj = task_dispatcher.dispatch(seq_function_request_payload)
+    assert isinstance(return_obj, list)
+
+    # post-processing distributed computing
+    for opt_result in return_obj:
+        assert isinstance(opt_result, _AlgorithmOneRangeFunctionReturn)
+        seq_optimized_mmd.append(opt_result)
+        # save a model
+        if opt_result.is_success:
+            assert opt_result.request.path_work_dir is not None
+            Path(opt_result.request.path_work_dir).mkdir(
+                parents=True, exist_ok=True
+            )
+            path_save_model = opt_result.request.path_work_dir / "trained_model.pt"
+            torch.save(opt_result.trained_result, path_save_model)
+        # end if
+
+        if post_process_handler is not None:
+            __run_name = opt_result.get_key_id()
+            __loggers = post_process_handler.initialize_logger(run_name=__run_name, group_name=detection_algorithm_one.__name__)
+            post_process_handler.log(loggers=__loggers, target_object=opt_result)
+        # end if
+    # end for
     return seq_optimized_mmd
+
 
 
 def __run_algorithm_one_search_objective_based(

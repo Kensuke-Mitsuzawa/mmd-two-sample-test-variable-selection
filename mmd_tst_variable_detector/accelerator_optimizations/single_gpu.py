@@ -4,17 +4,11 @@ import typing as ty
 import torch
 
 from .base import BaseTaskDispatcher
-from .worker import worker_execution_routine
 from .concurrent_gpu_modules.gpu_environment_manager import assert_device_compatibility
-from ..detection_algorithm.cross_validation_detector.commons import (
-    RequestDistributedFunction,
-    SubLearnerTrainingResult,
-)
-from ..detection_algorithm.cross_validation_detector.checkpoint_saver import (
-    CheckPointSaverStabilitySelection,
-)
 from ..utils.post_process_logger import PostProcessLoggerHandler
 from ..logger_unit import handler
+
+
 
 logger = logging.getLogger(f"{__package__}.{__name__}")
 logger.addHandler(handler)
@@ -31,15 +25,17 @@ class SingleGpuTaskDispatcher(BaseTaskDispatcher):
         self,
         device_id: int = 0,
         batch_size: int = 1,
-        resume_checkpoint_saver: ty.Optional[CheckPointSaverStabilitySelection] = None,
+        resume_checkpoint_saver: ty.Optional[ty.Any] = None,
         post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
         cv_experiment_name: ty.Optional[str] = None,
+        worker_fn: ty.Optional[ty.Callable] = None,
     ) -> None:
         super().__init__(
             batch_size=batch_size,
             resume_checkpoint_saver=resume_checkpoint_saver,
             post_process_handler=post_process_handler,
             cv_experiment_name=cv_experiment_name,
+            worker_fn=worker_fn,
         )
         self.device_id = device_id
 
@@ -48,23 +44,28 @@ class SingleGpuTaskDispatcher(BaseTaskDispatcher):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             gc.collect()
+        # end if
 
     def dispatch(
-        self, seq_task_arguments: ty.List[RequestDistributedFunction]
-    ) -> ty.List[SubLearnerTrainingResult]:
+        self, seq_task_arguments: ty.List[ty.Any]
+    ) -> ty.List[ty.Any]:
         """Dispatch tasks after asserting GPU device compatibility."""
         if seq_task_arguments:
             assert_device_compatibility(self.device_id)
+        # end if
         return super().dispatch(seq_task_arguments)
 
     def _execute_batch(
-        self, batch: ty.List[RequestDistributedFunction]
-    ) -> ty.List[SubLearnerTrainingResult]:
-        batch_results: ty.List[SubLearnerTrainingResult] = []
+        self, batch: ty.List[ty.Any]
+    ) -> ty.List[ty.Any]:
+        batch_results: ty.List[ty.Any] = []
         for task in batch:
             try:
-                res = worker_execution_routine(task)
+                res = self.worker_fn(task)
                 batch_results.append(res)
             finally:
                 self._clean_cuda_cache()
+            # end try
+        # end for
         return batch_results
+

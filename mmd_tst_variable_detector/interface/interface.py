@@ -54,6 +54,7 @@ class Interface(object):
         # Attributes
         self.dask_cluster = None
         self.dask_client = None
+        self.gpu_env_manager = None
         
         self.path_work_dir: ty.Optional[Path] = None
         self.path_ml_logger_dir: ty.Optional[Path] = None
@@ -104,12 +105,34 @@ class Interface(object):
                     __dask_dashboard_address = dask_config.dask_dashboard_address
                 # end if
                 
-                dask_cluster = LocalCluster(
-                    __distination,
-                    n_workers=dask_config.dask_n_workers,
-                    threads_per_worker=dask_config.dask_threads_per_worker,
-                    dashboard_address=__dask_dashboard_address,)
-                dask_client = Client(self.dask_cluster)
+                accelerator = self.config_args.resource_config_args.train_accelerator.lower()
+                if accelerator in ('gpu', 'cuda'):
+                    from ..accelerator_optimizations.concurrent_gpu_modules import (
+                        GpuEnvironmentManager,
+                        DeviceSlotManager,
+                    )
+                    try:
+                        self.gpu_env_manager = GpuEnvironmentManager(enable_mps=True)
+                        self.gpu_env_manager.start_mps()
+                    except Exception as e:
+                        logger.warning(f"Could not start MPS daemon: {e}")
+                    # end try
+                    n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
+                    k_slots = getattr(dask_config, 'k_slots_per_gpu', max(1, dask_config.dask_n_workers // max(1, n_gpus)))
+                    dask_cluster, dask_client = DeviceSlotManager.create_gpu_cluster(
+                        n_gpus=n_gpus,
+                        k_slots_per_gpu=k_slots,
+                        dashboard_address=__dask_dashboard_address,
+                    )
+                else:
+                    dask_cluster = LocalCluster(
+                        __distination,
+                        n_workers=dask_config.dask_n_workers,
+                        threads_per_worker=dask_config.dask_threads_per_worker,
+                        dashboard_address=__dask_dashboard_address,
+                    )
+                    dask_client = Client(dask_cluster)
+                # end if
                 logger.debug(f'Local dask cluster is created.')
             else:
                 dask_cluster = None
@@ -386,6 +409,15 @@ class Interface(object):
             dask_cluster.close()
             del dask_cluster
             gc.collect()
+        # end if
+
+        if getattr(self, "gpu_env_manager", None) is not None:
+            try:
+                self.gpu_env_manager.stop_mps()
+            except Exception as e:
+                logger.warning(f"Error stopping MPS daemon: {e}")
+            # end try
+            self.gpu_env_manager = None
         # end if
         
     def get_result(self, output_mode: str = 'simple') -> OutputObject:

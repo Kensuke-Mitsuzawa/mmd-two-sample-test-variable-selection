@@ -2,11 +2,6 @@ import logging
 import typing as ty
 
 from .base import BaseTaskDispatcher
-from .worker import worker_execution_routine
-from ..detection_algorithm.cross_validation_detector.commons import (
-    RequestDistributedFunction,
-    SubLearnerTrainingResult,
-)
 from ..logger_unit import handler
 
 logger = logging.getLogger(f"{__package__}.{__name__}")
@@ -20,9 +15,12 @@ class SingleCpuTaskDispatcher(BaseTaskDispatcher):
     """
 
     def _execute_batch(
-        self, batch: ty.List[RequestDistributedFunction]
-    ) -> ty.List[SubLearnerTrainingResult]:
-        batch_results: ty.List[SubLearnerTrainingResult] = []
+        self, batch: ty.List[ty.Any]
+    ) -> ty.List[ty.Any]:
+        batch_results: ty.List[ty.Any] = []
         for task in batch:
-            batch_results.append(worker_execution_routine(task))
+            batch_results.append(self.worker_fn(task))
+        # end for
         return batch_results
+
+

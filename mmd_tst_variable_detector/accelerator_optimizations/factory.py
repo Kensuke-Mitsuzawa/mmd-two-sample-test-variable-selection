@@ -1,4 +1,5 @@
 import typing as ty
+import torch
 from distributed import Client
 
 from .base import BaseTaskDispatcher
@@ -6,9 +7,6 @@ from .single_cpu import SingleCpuTaskDispatcher
 from .single_gpu import SingleGpuTaskDispatcher
 from .dask_cpu import DaskCpuTaskDispatcher
 from .concurrent_gpu import ConcurrentGpuTaskDispatcher
-from ..detection_algorithm.cross_validation_detector.checkpoint_saver import (
-    CheckPointSaverStabilitySelection,
-)
 from ..utils.post_process_logger import PostProcessLoggerHandler
 
 
@@ -18,10 +16,12 @@ def create_task_dispatcher(
     dask_client: ty.Optional[Client] = None,
     dask_scheduler_address: ty.Optional[str] = None,
     batch_size: int = 1,
-    resume_checkpoint_saver: ty.Optional[CheckPointSaverStabilitySelection] = None,
+    resume_checkpoint_saver: ty.Optional[ty.Any] = None,
+
     post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
     cv_experiment_name: ty.Optional[str] = None,
     device_id: int = 0,
+    worker_fn: ty.Optional[ty.Callable] = None,
     **kwargs: ty.Any,
 ) -> BaseTaskDispatcher:
     """Factory function creating the appropriate BaseTaskDispatcher instance.
@@ -46,6 +46,8 @@ def create_task_dispatcher(
         Unique experiment identifier for logging.
     device_id : int
         Target GPU device index for single GPU execution.
+    worker_fn : Optional[Callable]
+        Custom worker execution function for tasks.
 
     Returns
     -------
@@ -53,6 +55,9 @@ def create_task_dispatcher(
         Concrete dispatcher configured for the requested mode.
     """
     accelerator_normalized = train_accelerator.lower()
+    if accelerator_normalized == "auto":
+        accelerator_normalized = "cuda" if torch.cuda.is_available() else "cpu"
+    # end if
     mode_normalized = distributed_mode.lower()
 
     common_kwargs = dict(
@@ -60,6 +65,7 @@ def create_task_dispatcher(
         resume_checkpoint_saver=resume_checkpoint_saver,
         post_process_handler=post_process_handler,
         cv_experiment_name=cv_experiment_name,
+        worker_fn=worker_fn,
     )
 
     if mode_normalized == "single":

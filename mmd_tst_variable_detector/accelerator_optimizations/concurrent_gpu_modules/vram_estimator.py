@@ -4,9 +4,8 @@ import math
 import typing as ty
 import torch
 
-from ...detection_algorithm.cross_validation_detector.commons import RequestDistributedFunction
-
 logger = logging.getLogger(__name__)
+
 
 
 class VramConsumptionEstimator(object):
@@ -73,7 +72,7 @@ class VramConsumptionEstimator(object):
 
     def estimate_from_task(
         self,
-        sample_task: ty.Optional[RequestDistributedFunction] = None,
+        sample_task: ty.Optional[ty.Any] = None,
     ) -> int:
         """Estimate peak VRAM per task and determine optimal K slots per GPU.
 
