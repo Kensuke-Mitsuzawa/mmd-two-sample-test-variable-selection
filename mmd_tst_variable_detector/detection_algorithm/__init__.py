@@ -1,12 +1,16 @@
+from .base import BaseVariableDetector, BaseMmdOptimizationExecutor
 from .commons import *
 from .cross_validation_detector import *
 from .detection_algorithm_one import (
     detection_algorithm_one, 
     AlgorithmOneResult, 
-    AlgorithmOneIndividualResult)
+    AlgorithmOneIndividualResult,
+    AlgorithmOneVariableDetector,
+)
 from .baseline_mmd import (
     BaselineMmdResult,
-    baseline_mmd
+    baseline_mmd,
+    BaselineMmdVariableDetector,
 )
 from .pytorch_lightning_trainer import PytorchLightningDefaultArguments
 from .early_stoppings import *

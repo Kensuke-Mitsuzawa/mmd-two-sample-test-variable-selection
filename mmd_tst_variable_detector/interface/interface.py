@@ -22,6 +22,8 @@ from ..datasets import (
     FileBackendOneTimeLoadStaticDataset,
     SimpleDataset
 )
+from ..detection_algorithm.base import BaseVariableDetector
+
 
 from .module_configs import (
     CvSelectionConfigArgs,
@@ -60,6 +62,7 @@ class Interface(object):
         self.path_ml_logger_dir: ty.Optional[Path] = None
         self.path_model_dir: ty.Optional[Path] = None
         
+        self.detector: ty.Optional[BaseVariableDetector] = None
         self.detection_sample_based: ty.Optional[BasicVariableSelectionResult] = None
         # --------------------------------------------------------------------------- #        
         
@@ -341,6 +344,7 @@ class Interface(object):
                 dataset_train=dataset_train,
                 dataset_test=dataset_test,
                 dask_client=dask_client)
+            self.detector = getattr(selection_result, 'detector', None)
         else:
             raise ValueError(f'Invalid approach_variable_detector: {self.config_args.approach_config_args.approach_variable_detector}')
     

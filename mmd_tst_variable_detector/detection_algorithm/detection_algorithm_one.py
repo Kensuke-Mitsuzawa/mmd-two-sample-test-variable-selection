@@ -27,6 +27,7 @@ from ..utils import (
     detect_variables, 
     PermutationTest)
 
+from .base import BaseVariableDetector
 from .pytorch_lightning_trainer import PytorchLightningDefaultArguments
 from .interpretable_mmd_detector import (
     InterpretableMmdTrainResult, 
@@ -724,6 +725,146 @@ def __run_algorithm_one_search_objective_based(
     return seq_optimized_mmd
 
 
+_run_algorithm_one_min_max_param_range = __run_algorithm_one_min_max_param_range
+_run_algorithm_one_search_objective_based = __run_algorithm_one_search_objective_based
+_select_model = __select_model
+
+
+class AlgorithmOneVariableDetector(BaseVariableDetector):
+    """Algorithm One variable detector."""
+
+    def __init__(
+        self,
+        estimator: BaseMmdEstimator,
+        base_training_parameter: InterpretableMmdTrainParameters,
+        pytorch_trainer_config: ty.Optional[PytorchLightningDefaultArguments] = None,
+        candidate_regularization_parameters: PossibleTypeRegularizationParameter = 'search_objective_based',
+        regularization_search_parameter: RegularizationSearchParameters = RegularizationSearchParameters(),
+        dask_client: ty.Optional[Client] = None,
+        distributed_batch_size: int = -1,
+        variable_detection_method: str = "hist_based",
+        is_p_value_filter: bool = False,
+        dataset_test: ty.Optional[BaseDataset] = None,
+        path_work_dir: ty.Optional[Path] = None,
+        post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
+        test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
+        n_permutation_test: int = 500,
+        **kwargs: ty.Any,
+    ) -> None:
+        super().__init__(
+            estimator=estimator,
+            pytorch_trainer_config=pytorch_trainer_config,
+            post_process_handler=post_process_handler,
+            dask_client=dask_client,
+            **kwargs,
+        )
+        self.base_training_parameter = base_training_parameter
+        self.candidate_regularization_parameters = candidate_regularization_parameters
+        self.regularization_search_parameter = regularization_search_parameter
+        self.distributed_batch_size = distributed_batch_size
+        self.variable_detection_method = variable_detection_method
+        self.is_p_value_filter = is_p_value_filter
+        self.dataset_test = dataset_test
+        self.path_work_dir = path_work_dir
+        self.test_distance_functions = test_distance_functions
+        self.n_permutation_test = n_permutation_test
+    # end def
+
+    def run_detection(
+        self,
+        training_dataset: BaseDataset,
+        validation_dataset: ty.Optional[BaseDataset] = None,
+        dataset_test: ty.Optional[BaseDataset] = None,
+        **kwargs: ty.Any,
+    ) -> AlgorithmOneResult:
+        """Run Algorithm One variable detection workflow."""
+        dataset_dev = validation_dataset if validation_dataset is not None else training_dataset
+        test_dataset = dataset_test if dataset_test is not None else self.dataset_test
+        candidate_params = kwargs.get('candidate_regularization_parameters', self.candidate_regularization_parameters)
+        reg_search_param = kwargs.get('regularization_search_parameter', self.regularization_search_parameter)
+        trainer_config = self.pytorch_trainer_config if self.pytorch_trainer_config is not None else PytorchLightningDefaultArguments()
+
+        reg_mode: str
+        if isinstance(candidate_params, list):
+            assert all(isinstance(obj, RegularizationParameter) for obj in candidate_params)
+            reg_mode = 'min_max_param_range'
+        else:
+            assert isinstance(candidate_params, SelectionResult) or isinstance(candidate_params, str)
+            if isinstance(candidate_params, str):
+                assert candidate_params in ('auto_min_max_range', 'search_objective_based'), \
+                    f'candidate_regularization_parameters must be either "auto_min_max_range" or "search_objective_based".'
+                if candidate_params == 'auto_min_max_range':
+                    reg_mode = 'min_max_param_range'
+                elif candidate_params == 'search_objective_based':
+                    reg_mode = 'search_objective_based'
+                else:
+                    raise ValueError(f'candidate_regularization_parameters is unexpected value: {candidate_params}')
+            else:
+                raise ValueError(f'`candidate_regularization_parameters` is unexpected object. Current type -> {type(candidate_params)}')
+            # end if
+        # end if
+
+        work_dir = self.path_work_dir
+        clean_up_work_dir = False
+        if work_dir is None:
+            work_dir = Path(mkdtemp())
+            clean_up_work_dir = True
+        # end if
+
+        seq_optimized_mmd = []
+        if reg_mode == 'min_max_param_range':
+            seq_optimized_mmd = _run_algorithm_one_min_max_param_range(
+                candidate_regularization_parameters=candidate_params,
+                dataset_training=training_dataset,
+                dataset_dev=dataset_dev,
+                mmd_estimator=self.estimator,
+                base_training_parameter=self.base_training_parameter,
+                pytorch_trainer_config=trainer_config,
+                path_work_dir=work_dir,
+                optuna_regularization_search_parameter=reg_search_param,
+                post_process_handler=self.post_process_handler,
+                dask_client=self.dask_client,
+                dataset_test=test_dataset,
+                distributed_batch_size=self.distributed_batch_size,
+                variable_detection_method=self.variable_detection_method,
+                test_distance_functions=self.test_distance_functions,
+                n_permutation_test=self.n_permutation_test,
+            )
+        elif reg_mode == 'search_objective_based':
+            seq_optimized_mmd = _run_algorithm_one_search_objective_based(
+                candidate_regularization_parameters=candidate_params,
+                dataset_training=training_dataset,
+                dataset_dev=dataset_dev,
+                mmd_estimator=self.estimator,
+                base_training_parameter=self.base_training_parameter,
+                pytorch_trainer_config=trainer_config,
+                path_work_dir=work_dir,
+                optuna_regularization_search_parameter=reg_search_param,
+                post_process_handler=self.post_process_handler,
+                dask_client=self.dask_client,
+                dataset_test=test_dataset,
+                variable_detection_method=self.variable_detection_method,
+                test_distance_functions=self.test_distance_functions,
+                n_permutation_test=self.n_permutation_test,
+            )
+        else:
+            raise ValueError(f'reg_mode is unexpected value: {reg_mode}')
+        # end if
+
+        individual_result, trained_models = _select_model(
+            is_p_value_filter=self.is_p_value_filter,
+            seq_optimized_mmd=seq_optimized_mmd,
+        )
+
+        if clean_up_work_dir:
+            shutil.rmtree(work_dir.as_posix())
+        # end if
+
+        return AlgorithmOneResult(individual_result, trained_models)
+    # end def
+# end class
+
+
 def detection_algorithm_one(
     mmd_estimator: BaseMmdEstimator,
     pytorch_trainer_config: PytorchLightningDefaultArguments,
@@ -743,109 +884,27 @@ def detection_algorithm_one(
     test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
     n_permutation_test: int = 500
     ) -> AlgorithmOneResult:
-    """
-    Args
-    -----
-    mmd_estimator: MMD estimator.
-    pytorch_trainer_config: Pytorch lightning trainer configuration.
-    dataset_training: Training dataset.
-    dataset_dev: Dev dataset.
-    candidate_regularization_parameters: A set of regularization parameters.
-        `SelectionResult`: Result object from searching module of regularization parameters.
-        `List[RegularizationParameter]`: A set of regularization parameters.
-        `auto`: Optuna seaches for min. and max. of regularization parameters.
-        `search_objective_based`: Optuna seaches for MMD-estimators by minimizing a customized obj. function.
-    regularization_search_parameter: Parameter search configuration.
-        Use only when `candidate_regularization_parameters` is None.
-    dask_client: Dask client.
-    distributed_batch_size: Batch size for distributed computing.
-    variable_detection_method: Variable detection method.
-    is_p_value_filter: If True, the algorithm selects a model where p-value is less than 0.05.
-    permutation_test_runner_base: Permutation test runner.
-    dataset_test: Test dataset.
-    path_work_dir: Working directory.
-    post_process_handler: Post process handler.
-    n_permutation_test: Number of permutation test.
-    
-    Returns
-    -------
-    AlgorithmOneResult
-    """
-    __reg_mode: str
-    # checking possible input type
-    if isinstance(candidate_regularization_parameters, list):
-        assert all(isinstance(obj, RegularizationParameter) for obj in candidate_regularization_parameters)
-        __reg_mode = 'min_max_param_range'
-    else:
-        assert isinstance(candidate_regularization_parameters, SelectionResult) or isinstance(candidate_regularization_parameters, str)
-        if isinstance(candidate_regularization_parameters, str):
-            assert candidate_regularization_parameters in ('auto_min_max_range', 'search_objective_based'), \
-                f'candidate_regularization_parameters must be either "auto_min_max_range" or "search_objective_based".'
-            if candidate_regularization_parameters == 'auto_min_max_range':
-                __reg_mode = 'min_max_param_range'
-            elif candidate_regularization_parameters == 'search_objective_based':
-                __reg_mode = 'search_objective_based'
-            else:
-                raise ValueError(f'candidate_regularization_parameters is unexpected value: {candidate_regularization_parameters}')
-        else:
-            raise ValueError(f'`candidate_regularization_parameters` is unexpected object. Current type -> {type(candidate_regularization_parameters)}')
-        # end if
-    # end if
-    
-    
-    if path_work_dir is None:
-        path_work_dir = Path(mkdtemp())
-    # end if
-    
-    seq_optimized_mmd = []
-    
-    # TODO: inconsistent implementation. `__run_algorithm_one_min_max_param_range` has the argument `permutation_test_runner_base`.
-    # However, `permutation_test_runner_base` in `__run_algorithm_one_search_objective_based` has no effect.
-    # I have to make them consistent.
-    if __reg_mode == 'min_max_param_range':
-        seq_optimized_mmd = __run_algorithm_one_min_max_param_range(
-            candidate_regularization_parameters=candidate_regularization_parameters,
-            dataset_training=dataset_training,
-            dataset_dev=dataset_dev,
-            mmd_estimator=mmd_estimator,
-            base_training_parameter=base_training_parameter,
-            pytorch_trainer_config=pytorch_trainer_config,
-            path_work_dir=path_work_dir,
-            optuna_regularization_search_parameter=regularization_search_parameter,
-            post_process_handler=post_process_handler,
-            dask_client=dask_client,
-            dataset_test=dataset_test,
-            distributed_batch_size=distributed_batch_size,
-            # permutation_test_runner_base=permutation_test_runner_base,
-            variable_detection_method=variable_detection_method,
-            test_distance_functions=test_distance_functions,
-            n_permutation_test=n_permutation_test
-            )
-    elif __reg_mode == 'search_objective_based':
-        seq_optimized_mmd = __run_algorithm_one_search_objective_based(
-            candidate_regularization_parameters=candidate_regularization_parameters,
-            dataset_training=dataset_training,
-            dataset_dev=dataset_dev,
-            mmd_estimator=mmd_estimator,
-            base_training_parameter=base_training_parameter,
-            pytorch_trainer_config=pytorch_trainer_config,
-            path_work_dir=path_work_dir,
-            optuna_regularization_search_parameter=regularization_search_parameter,
-            post_process_handler=post_process_handler,
-            dask_client=dask_client,
-            dataset_test=dataset_test,
-            # permutation_test_runner_base=permutation_test_runner_base,
-            variable_detection_method=variable_detection_method,
-            test_distance_functions=test_distance_functions,
-            n_permutation_test=n_permutation_test)
-    else:
-        raise ValueError(f'__reg_mode is unexpected value: {__reg_mode}')
-    
-    individual_result, trained_models = __select_model(is_p_value_filter=is_p_value_filter, seq_optimized_mmd=seq_optimized_mmd)
-        
-    if path_work_dir is None:
-        shutil.rmtree(path_work_dir.as_posix())
-    # end if
-    
-    # TODO adding optuna search result.
-    return AlgorithmOneResult(individual_result, trained_models)
+    """Execute Algorithm One variable detection via AlgorithmOneVariableDetector."""
+    detector = AlgorithmOneVariableDetector(
+        estimator=mmd_estimator,
+        base_training_parameter=base_training_parameter,
+        pytorch_trainer_config=pytorch_trainer_config,
+        candidate_regularization_parameters=candidate_regularization_parameters,
+        regularization_search_parameter=regularization_search_parameter,
+        dask_client=dask_client,
+        distributed_batch_size=distributed_batch_size,
+        variable_detection_method=variable_detection_method,
+        is_p_value_filter=is_p_value_filter,
+        dataset_test=dataset_test,
+        path_work_dir=path_work_dir,
+        post_process_handler=post_process_handler,
+        test_distance_functions=test_distance_functions,
+        n_permutation_test=n_permutation_test,
+    )
+    return detector.run_detection(
+        training_dataset=dataset_training,
+        validation_dataset=dataset_dev,
+        dataset_test=dataset_test,
+    )
+# end def
+

@@ -44,6 +44,7 @@ class BasicVariableSelectionResult:
     verbose_field: ty.Optional[ty.Union[TstBasedRegressionTunerResult, BaselineMmdResult, CrossValidationTrainedParameter, AlgorithmOneResult]] = None
     n_sample_training: ty.Optional[int] = None
     n_sample_test: ty.Optional[int] = None
+    detector: ty.Optional[ty.Any] = None
     
     def __post_init__(self):
         if isinstance(self.weights, list):
