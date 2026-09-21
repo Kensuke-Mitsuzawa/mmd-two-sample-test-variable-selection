@@ -1,3 +1,3 @@
-from .early_stopping import ConvergenceEarlyStop
-from .variable_early_stopping import VariableEarlyStopping
-from .weights_early_stopping import ArdWeightsEarlyStopping
+from .early_stopping import ConvergenceEarlyStop, LegacyConvergenceEarlyStop
+from .variable_early_stopping import VariableEarlyStopping, LegacyVariableEarlyStopping
+from .weights_early_stopping import ArdWeightsEarlyStopping, LegacyArdWeightsEarlyStopping
