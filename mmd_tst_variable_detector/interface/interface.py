@@ -122,16 +122,20 @@ class Interface(object):
                     # end try
                     n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
                     k_slots = getattr(dask_config, 'k_slots_per_gpu', max(1, dask_config.dask_n_workers // max(1, n_gpus)))
+                    dask_memory_limit = getattr(dask_config, 'dask_memory_limit', 0)
                     dask_cluster, dask_client = DeviceSlotManager.create_gpu_cluster(
                         n_gpus=n_gpus,
                         k_slots_per_gpu=k_slots,
+                        memory_limit=dask_memory_limit,
                         dashboard_address=__dask_dashboard_address,
                     )
                 else:
+                    dask_memory_limit = getattr(dask_config, 'dask_memory_limit', 0)
                     dask_cluster = LocalCluster(
                         __distination,
                         n_workers=dask_config.dask_n_workers,
                         threads_per_worker=dask_config.dask_threads_per_worker,
+                        memory_limit=dask_memory_limit if dask_memory_limit is not None else 0,
                         dashboard_address=__dask_dashboard_address,
                     )
                     dask_client = Client(dask_cluster)

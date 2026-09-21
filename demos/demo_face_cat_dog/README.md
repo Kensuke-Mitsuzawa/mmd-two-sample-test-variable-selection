@@ -4,8 +4,11 @@ This demo illustrates variable selection between two image distributions (Cat vs
 
 ## Usage
 
-1. **Dataset Setup**: Download the AFHQ dataset (see the Dataset Setting section below).
-2. **Configure**: Update `cat_and_dog_config/cat_and_dog_config.toml` with the dataset paths and hardware options.
+1. **Dataset Setup**: Run the setup script to automatically download and extract the AFHQ dataset based on your configuration:
+   ```bash
+   python setup_dataset.py [--path_config cat_and_dog_config/cat_and_dog_config.toml]
+   ```
+2. **Configure**: Update `cat_and_dog_config/cat_and_dog_config.toml` with the dataset paths and hardware options (if not using defaults).
 3. **Run Assessment**:
    ```bash
    python run_assessment.py [--path_config path/to/config.toml]
@@ -60,7 +63,7 @@ n_workers = 4
 ---
 
 ## Dataset Setting
-
-You need the AFHQ dataset in your local storage:
-1. Follow the instructions on the [AFHQ Github page](https://github.com/clovaai/stargan-v2/blob/master/README.md#animal-faces-hq-dataset-afhq).
-2. Set `path_dir_data_source_x` (e.g. dog faces) and `path_dir_data_source_y` (e.g. cat faces) in `cat_and_dog_config.toml`.
+ 
+ You need the AFHQ dataset in your local storage:
+1. Run `python setup_dataset.py` which automatically downloads AFHQ from the [official StarGAN v2 release](https://github.com/clovaai/stargan-v2/blob/master/README.md#animal-faces-hq-dataset-afhq) and sets up the directories matching `cat_and_dog_config.toml`.
+2. Alternatively, follow the instructions on the [AFHQ Github page](https://github.com/clovaai/stargan-v2/blob/master/README.md#animal-faces-hq-dataset-afhq) and manually set `path_dir_data_source_x` (e.g. dog faces) and `path_dir_data_source_y` (e.g. cat faces) in `cat_and_dog_config.toml`.

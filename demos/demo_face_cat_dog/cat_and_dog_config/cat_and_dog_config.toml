@@ -7,7 +7,7 @@ dataset_type_backend = "ram"
     name_experiment_db = "experiment.json"
 
     # Rewriting the path here!
-    path_experiment_root = "cat_and_dogs"
+    path_experiment_root = "/root/mmd-two-sample-test-variable-selection/demos/demo_face_cat_dog/cat_and_dogs"
     dir_name_data = "data"
     dir_models = "models"
     dir_logs = "logs"
@@ -19,12 +19,14 @@ dataset_type_backend = "ram"
     # 'dask' enables concurrent-GPU multi-slot execution via ConcurrentGpuTaskDispatcher and NVIDIA MPS.
     # Set to 'single' for sequential execution.
     distributed_mode = "dask"
-    k_slots_per_gpu = 2
+    k_slots_per_gpu = "auto"
     dask_n_workers = 2
     dask_threads_per_worker = 1
     dask_scheduler_host = "0.0.0.0"
     dask_scheduler_port = 8786
     dask_dashboard_address = ":8787"
+    # Set to 0 to disable Dask memory budget worker termination (prevents killing PyTorch GPU workers)
+    dask_memory_limit = 0
 
 [approach]
     approach_data_representation = "sample_based"
@@ -39,8 +41,8 @@ dataset_type_backend = "ram"
 
     data_mode = "cat_and_dogs"
     # comment: replace these following paths below. To the directory where your AFHQ dataset exist.
-    path_dir_data_source_x = "cat_and_dogs/animal_faces/data/afhq/train/cat"
-    path_dir_data_source_y = "cat_and_dogs/animal_faces/data/afhq/train/dog"
+    path_dir_data_source_x = "/root/mmd-two-sample-test-variable-selection/demos/demo_face_cat_dog/cat_and_dogs/animal_faces/data/afhq/train/cat"
+    path_dir_data_source_y = "/root/mmd-two-sample-test-variable-selection/demos/demo_face_cat_dog/cat_and_dogs/animal_faces/data/afhq/train/dog"
     file_extension = 'jpg'
 
     file_name_x = "x.pt"

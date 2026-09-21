@@ -1,8 +1,8 @@
 import os
-# Prevent thread explosion in constrained environments
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+# # Prevent thread explosion in constrained environments
+# os.environ.setdefault("OMP_NUM_THREADS", "1")
+# os.environ.setdefault("MKL_NUM_THREADS", "1")
+# os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 from pathlib import Path
 import typing as ty
@@ -119,6 +119,8 @@ class BaseConfig:
     def __post_init__(self):
         self.path_experiment_root = Path(self.path_experiment_root)
 
+        assert self.path_experiment_root.is_absolute(), f'{self.path_experiment_root} is not absolute path. Please update the config.'
+
 
 @dataclass
 class DataSettingConfig:
@@ -167,12 +169,13 @@ class ComputationalResourceConfig:
 
     # 'dask' enables concurrent-GPU multi-slot execution via ConcurrentGpuTaskDispatcher
     distributed_mode: str = 'dask'
-    k_slots_per_gpu: int = 2
+    k_slots_per_gpu: ty.Union[int, str] = 2  # the concurrent number or "auto".
     dask_n_workers: int = 2
     dask_threads_per_worker: int = 1
     dask_scheduler_host: ty.Optional[str] = '0.0.0.0'
     dask_scheduler_port: int = 8786
     dask_dashboard_address: str = ':8787'
+    dask_memory_limit: ty.Optional[ty.Union[str, int]] = 0
 
     def __post_init__(self):
         self.train_accelerator = self.train_accelerator.lower()
@@ -362,6 +365,7 @@ def main(path_toml_config: Path):
         dask_dashboard_address=config_obj.computational_resource.dask_dashboard_address if is_dask else None,
         dask_n_workers=config_obj.computational_resource.dask_n_workers,
         dask_threads_per_worker=config_obj.computational_resource.dask_threads_per_worker,
+        dask_memory_limit=config_obj.computational_resource.dask_memory_limit,
         is_use_local_dask_cluster=is_dask,
     )
     # Attach k_slots_per_gpu so DeviceSlotManager in Interface initializes the multi-slot GPU cluster

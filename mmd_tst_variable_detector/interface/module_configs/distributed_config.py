@@ -29,12 +29,13 @@ class DistributedConfigArgs:
         2. 'dask': dask distributed.        
     """
     distributed_mode: str = 'dask'
-    
+    # TODO: please add description to these fields. The comment should be placed on the field definition.
     dask_scheduler_host: ty.Optional[str] = '0.0.0.0'
     dask_scheduler_port: ty.Optional[int] = 8786
     dask_dashboard_address: ty.Optional[str] = ':8787'
     dask_n_workers: int = 4
     dask_threads_per_worker: int = 4
+    dask_memory_limit: ty.Optional[ty.Union[str, int]] = 0
     
     is_use_local_dask_cluster: bool = True
     

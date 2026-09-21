@@ -15,7 +15,7 @@ class DeviceSlotManager(object):
     @staticmethod
     def build_worker_specs(
         n_gpus: int,
-        k_slots_per_gpu: int,
+        k_slots_per_gpu: ty.Union[int, str] = 2,
         memory_limit: ty.Optional[str] = None,
     ) -> ty.Dict[str, ty.Dict[str, ty.Any]]:
         """Construct the Dask worker specifications dictionary for SpecCluster.
@@ -24,8 +24,8 @@ class DeviceSlotManager(object):
         ----------
         n_gpus : int
             Number of available GPUs.
-        k_slots_per_gpu : int
-            Number of concurrent worker slots per GPU.
+        k_slots_per_gpu : Union[int, str]
+            Number of concurrent worker slots per GPU or 'auto'.
         memory_limit : Optional[str]
             Memory limit per worker (e.g. '4GB').
 
@@ -34,10 +34,19 @@ class DeviceSlotManager(object):
         Dict[str, Dict[str, Any]]
             Worker specification dictionary mapping worker_name to Nanny configuration.
         """
+        if isinstance(k_slots_per_gpu, str) and k_slots_per_gpu.lower() == "auto":
+            from .vram_estimator import VramConsumptionEstimator
+            estimator = VramConsumptionEstimator(device_id=0)
+            resolved_k_slots = estimator.estimate_from_task()
+            logger.info(f"Auto-calculated k_slots_per_gpu to {resolved_k_slots} based on VRAM.")
+        else:
+            resolved_k_slots = int(k_slots_per_gpu)
+        # end if
+
         worker_specs = {}
 
         for gpu_id in range(n_gpus):
-            for slot_id in range(k_slots_per_gpu):
+            for slot_id in range(resolved_k_slots):
                 worker_name = f"gpu_{gpu_id}_slot_{slot_id}"
                 options: ty.Dict[str, ty.Any] = {
                     "name": worker_name,
@@ -51,6 +60,9 @@ class DeviceSlotManager(object):
                 }
                 if memory_limit is not None:
                     options["memory_limit"] = memory_limit
+                else:
+                    options["memory_limit"] = 0
+                # end if
 
                 worker_specs[worker_name] = {
                     "cls": Nanny,
@@ -63,7 +75,7 @@ class DeviceSlotManager(object):
     def create_gpu_cluster(
         cls,
         n_gpus: int = 1,
-        k_slots_per_gpu: int = 2,
+        k_slots_per_gpu: ty.Union[int, str] = 2,
         memory_limit: ty.Optional[str] = None,
         **cluster_kwargs: ty.Any,
     ) -> ty.Tuple[SpecCluster, Client]:
@@ -73,8 +85,8 @@ class DeviceSlotManager(object):
         ----------
         n_gpus : int
             Number of GPUs to distribute across.
-        k_slots_per_gpu : int
-            Number of concurrent worker slots per GPU.
+        k_slots_per_gpu : Union[int, str]
+            Number of concurrent worker slots per GPU or 'auto'.
         memory_limit : Optional[str]
             Optional RAM limit per worker process.
         cluster_kwargs : Any
