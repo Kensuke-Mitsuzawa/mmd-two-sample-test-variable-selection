@@ -1,6 +1,6 @@
 [project]
 name = "mmd_tst_variable_detector"
-version = "1.6.0"
+version = "1.6.1"
 description = "MMD Two-Sample Test Variable Selection"
 readme = "README.md"
 authors = [
