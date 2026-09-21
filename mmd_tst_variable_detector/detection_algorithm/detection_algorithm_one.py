@@ -28,7 +28,11 @@ from ..utils import (
     PermutationTest)
 
 from .base import BaseVariableDetector
-from .pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from .pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from .interpretable_mmd_detector import (
     InterpretableMmdTrainResult, 
     InterpretableMmdTrainParameters)
@@ -109,7 +113,7 @@ class _AlgorithmOneRangeFunctionReturn(ty.NamedTuple):
     trained_result: ty.Optional[InterpretableMmdTrainResult]
     indices_detected: ty.List[int]
     regularization_parameter: RegularizationParameter
-    trainer: ty.Optional[pl.Trainer] = None
+    trainer: ty.Optional[ty.Any] = None
     test_power_dev: ty.Optional[float] = None
     p_value_dev: ty.Optional[float] = None
     p_value_test: ty.Optional[float] = None
@@ -150,7 +154,14 @@ def __run_optimization_estimator(requests: _AlgorithmOneRangeFunctionRequestPayl
     
     # n_permutation_test = requests.n_permutation_test  # TODO delete this line.
     
-    pl_trainer = pl.Trainer(**requests.pl_trainer_config.as_dict())
+    use_legacy = getattr(requests.parameter_variable_trainer, "use_legacy_optimization", False) or \
+                 getattr(requests.pl_trainer_config, "use_legacy_optimization", False)
+    detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+    pl_trainer = create_mmd_trainer(
+        trainer_config=requests.pl_trainer_config,
+        trainer_backend=getattr(requests.parameter_variable_trainer, "trainer_backend", None),
+        use_fused_kernel=getattr(requests.parameter_variable_trainer, "use_fused_kernel", None),
+    )
     
     if requests.dataset_training.is_dataset_on_ram():
         dataset_training = requests.dataset_training.generate_dataset_on_ram()
@@ -162,7 +173,7 @@ def __run_optimization_estimator(requests: _AlgorithmOneRangeFunctionRequestPayl
         dataset_dev = requests.dataset_dev
     # end if
     
-    mmd_variable_trainer = InterpretableMmdDetector(
+    mmd_variable_trainer = detector_cls(
         mmd_estimator=requests.mmd_estimator,
         training_parameter=requests.parameter_variable_trainer,
         dataset_train=dataset_training,
@@ -658,12 +669,19 @@ def __run_algorithm_one_search_objective_based(
         dataset_dev = dataset_dev.generate_dataset_on_ram()
     # end if
     
-    variable_detector = InterpretableMmdDetector(
+    use_legacy = getattr(__training_param, "use_legacy_optimization", False) or \
+                 getattr(pytorch_trainer_config, "use_legacy_optimization", False)
+    detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+    variable_detector = detector_cls(
         mmd_estimator=deepcopy(mmd_estimator),
         training_parameter=__training_param,
         dataset_train=dataset_training,
         dataset_validation=dataset_dev)
-    pl_trainer_obj = pl.Trainer(**pytorch_trainer_config.as_dict())
+    pl_trainer_obj = create_mmd_trainer(
+        trainer_config=pytorch_trainer_config,
+        trainer_backend=getattr(__training_param, "trainer_backend", None),
+        use_fused_kernel=getattr(__training_param, "use_fused_kernel", None),
+    )
     pl_trainer_obj.fit(variable_detector)
     detection_result_obj = variable_detector.get_trained_variables()
     variable_detected = detect_variables(detection_result_obj.ard_weights_kernel_k)

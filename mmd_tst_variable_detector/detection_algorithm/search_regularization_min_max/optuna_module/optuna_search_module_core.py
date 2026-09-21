@@ -26,7 +26,11 @@ from ....accelerator_optimizations.factory import create_task_dispatcher
 
 from ....mmd_estimator.mmd_estimator import BaseMmdEstimator
 from ...interpretable_mmd_detector import InterpretableMmdDetector
-from ...pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from ...pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from ...commons import (
     RegularizationParameter, 
     InterpretableMmdTrainParameters, 
@@ -67,13 +71,19 @@ def __function_wrapper_optuna(dict_l1_l2_parameter: ty.Dict[str, ty.Union[int, f
    logger.debug(f'lambda_1 = {l1}, lambda_2 = {l2}')
    
    try:
-       variable_trainer = InterpretableMmdDetector(
+       use_legacy = getattr(new_training_param, "use_legacy_optimization", False) or \
+                    getattr(pytorch_trainer_config, "use_legacy_optimization", False)
+       detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+       variable_trainer = detector_cls(
             mmd_estimator=deepcopy(mmd_estimator),
             training_parameter=new_training_param,
             dataset_train=dataset_train,
             dataset_validation=dataset_test)              
-       trainer_pl = pl.Trainer(**asdict(pytorch_trainer_config))
-    #    variable_trainer = torch.compile(variable_trainer)
+       trainer_pl = create_mmd_trainer(
+           trainer_config=pytorch_trainer_config,
+           trainer_backend=getattr(new_training_param, "trainer_backend", None),
+           use_fused_kernel=getattr(new_training_param, "use_fused_kernel", None),
+       )
        trainer_pl.fit(variable_trainer)
    except OptimizationException as e:
          logger.warning(f'OptimizationException: {e}.'

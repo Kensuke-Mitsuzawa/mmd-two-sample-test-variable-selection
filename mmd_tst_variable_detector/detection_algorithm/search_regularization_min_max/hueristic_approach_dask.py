@@ -21,7 +21,11 @@ from ..interpretable_mmd_detector import (
 )
 from ...exceptions import OptimizationException
 from ...utils.post_process_logger import PostProcessLoggerHandler
-from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from ..pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from ...utils.variable_detection import detect_variables
 from .optuna_module.commons import SelectionResult
 from ...accelerator_optimizations.factory import create_task_dispatcher
@@ -276,7 +280,9 @@ def __generate_variable_detector_trainer(seq_generated_parameters: ty.List[Count
         __training_parameter = copy.deepcopy(training_parameter)
         __training_parameter.regularization_parameter = count_regularization_parameters.regularization_parameter
         if variable_trainer is None:
-            trainer_obj = InterpretableMmdDetector(
+            use_legacy = getattr(__training_parameter, "use_legacy_optimization", False)
+            detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+            trainer_obj = detector_cls(
                 mmd_estimator=__copy_base_estimator,
                 training_parameter=__training_parameter,
                 dataset_train=dataset,
@@ -295,8 +301,9 @@ def __generate_variable_detector_trainer(seq_generated_parameters: ty.List[Count
 
 def __func_dask_run(count_trainer_obj: CountedTrainer,
                     pytorch_trainer_config: PytorchLightningDefaultArguments,
-                    variable_detection_approach: str = "hist_based"
+                    variable_detection_approach: str = "hist_based",
                     ) -> ty.Tuple[int, ty.Optional[InterpretableMmdTrainResult], ty.List[int]]:
+    """Private function. Training a single MMD estimator and select variables."""
 
     if isinstance(count_trainer_obj.trainer.dataset_train, FileBackendOneTimeLoadStaticDataset):
         count_trainer_obj.trainer.dataset_train = count_trainer_obj.trainer.dataset_train.generate_dataset_on_ram()
@@ -305,7 +312,11 @@ def __func_dask_run(count_trainer_obj: CountedTrainer,
     # end if
 
     try:
-        trainer_pl = pl.Trainer(**asdict(pytorch_trainer_config))
+        trainer_pl = create_mmd_trainer(
+            trainer_config=pytorch_trainer_config,
+            trainer_backend=getattr(count_trainer_obj.trainer.training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(count_trainer_obj.trainer.training_parameter, "use_fused_kernel", None),
+        )
         trainer_pl.fit(count_trainer_obj.trainer)
     except OptimizationException as e:
         logger.error(f"In trainer No.{count_trainer_obj.count}, OptimizationException: {e}")

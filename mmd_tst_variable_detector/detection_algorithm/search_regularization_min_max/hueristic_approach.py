@@ -17,7 +17,11 @@ from ..interpretable_mmd_detector import (
     InterpretableMmdTrainResult
 )
 from ...utils.post_process_logger import PostProcessLoggerHandler
-from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from ..pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from ...utils.variable_detection import detect_variables
 from .optuna_module.commons import SelectionResult
 from ...logger_unit import handler 
@@ -273,7 +277,10 @@ def run_parameter_space_search(
         __training_parameter = copy.deepcopy(training_parameter)
         __training_parameter.regularization_parameter = regularization_parameters
         if variable_trainer is None:
-            trainer_obj = InterpretableMmdDetector(
+            use_legacy = getattr(__training_parameter, "use_legacy_optimization", False)
+            # TODO: type the class for `detector_cls` if possible
+            detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+            trainer_obj = detector_cls(
                 mmd_estimator=__copy_base_estimator,
                 training_parameter=__training_parameter,
                 dataset_train=dataset,
@@ -286,7 +293,11 @@ def run_parameter_space_search(
             )
         # end if
 
-        trainer_pl = pl.Trainer(**asdict(pytorch_trainer_config))
+        trainer_pl = create_mmd_trainer(
+            trainer_config=pytorch_trainer_config,
+            trainer_backend=getattr(__training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(__training_parameter, "use_fused_kernel", None),
+        )
         trainer_pl.fit(trainer_obj)
 
         # getting variables

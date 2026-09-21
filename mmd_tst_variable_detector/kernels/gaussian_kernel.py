@@ -145,7 +145,8 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
                      ard_weights: typing.Optional[torch.Tensor] = None,
                      heuristic_operation: str = 'median',
                      is_dimension_median_heuristic: bool = True,
-                     dask_client: typing.Optional[Client] = None
+                     dask_client: typing.Optional[Client] = None,
+                     use_fused_kernel: bool = False,
                      ) -> "QuadraticKernelGaussianKernel":
         """Public API. Create a kernel object from a dataset.
         """
@@ -165,7 +166,8 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
             heuristic_operation=heuristic_operation,
             is_dimension_median_heuristic=is_dimension_median_heuristic,
             opt_bandwidth=False,
-            dask_client=dask_client)
+            dask_client=dask_client,
+            use_fused_kernel=use_fused_kernel)
         
         # do kernel length initialization.
         kernel_obj.compute_length_scale_dataset(dataset)
