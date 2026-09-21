@@ -1,1 +1,2 @@
 from .commons import KernelMatrixObject, LinearKernelMatrixContainer, QuadraticKernelMatrixContainer
+from .fused_gaussian_kernel import FusedGaussianKernelFunction, compute_fused_gaussian_kernel

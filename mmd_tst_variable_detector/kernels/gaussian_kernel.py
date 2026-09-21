@@ -15,8 +15,10 @@ from ..distance_module.base import BaseDistanceModule
 from ..distance_module.l2_distance import L2Distance, DistanceContainer
 from .base import (BaseKernelLengthScaleSettings, KernelMatrixObject)
 from .commons import (QuadraticKernelMatrixContainer, LinearKernelMatrixContainer)
+from .fused_gaussian_kernel import compute_fused_gaussian_kernel
 from . import utils
 from .. import logger_unit
+
 
 
 logger = logging.getLogger(f'{__package__}.{__name__}')
@@ -85,7 +87,8 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
                  is_auto_adjust_gamma: bool = False,
                  is_dimension_median_heuristic: bool = True,
                  opt_bandwidth: bool = False,
-                 dask_client: typing.Optional[Client] = None):
+                 dask_client: typing.Optional[Client] = None,
+                 use_fused_kernel: bool = False):
         """
         Parameters
         ----------
@@ -113,6 +116,8 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
             If True, the bandwidth is optimized.
         dask_client: typing.Optional[Client]
             Dask client object. Used for computing the initial length scale (bandwidth).
+        use_fused_kernel: bool
+            If True and CUDA is available, computes the Gram matrix using the fused Triton kernel.
         """
         super().__init__(
             distance_module=distance_module,
@@ -129,6 +134,8 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
             kernel_computation_type='quadratic'
         )
         self.dask_client = dask_client
+        self.use_fused_kernel = use_fused_kernel
+
         
     @classmethod
     def from_dataset(cls, 
@@ -398,7 +405,21 @@ class QuadraticKernelGaussianKernel(BaseKernelLengthScaleSettings):
         # k_xy = torch.exp(-1 * torch.pow(__d_xy_ard_gamma, 2))
         # # end with
 
+        if getattr(self, "use_fused_kernel", False) and self.distance_module.coordinate_size == 1:
+            k_xx = compute_fused_gaussian_kernel(x, x, self.ard_weights, bandwidth)
+            k_yy = compute_fused_gaussian_kernel(y, y, self.ard_weights, bandwidth)
+            k_xy = compute_fused_gaussian_kernel(x, y, self.ard_weights, bandwidth)
+            k_container = QuadraticKernelMatrixContainer(k_xx, k_yy, k_xy)
+            return KernelMatrixObject(
+                kernel_computation_type=self.kernel_computation_type,
+                x_size=len(x),
+                y_size=len(y),
+                kernel_matrix_container=k_container
+            )
+        # end if
+
         if self.distance_module.coordinate_size == 1:
+
             x_projected = torch.mul(self.ard_weights, x)  # elementwise product of ARD weight and x
             y_projected = torch.mul(self.ard_weights, y)  # elementwise product of ARD weight and y            
             

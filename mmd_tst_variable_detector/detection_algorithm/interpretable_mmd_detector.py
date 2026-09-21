@@ -603,8 +603,9 @@ class LegacyInterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDet
         """
         __ard_kernel_k = self.mmd_estimator.kernel_obj.ard_weights.detach().cpu()
 
+        global_step = getattr(self.trainer, "global_step", 0) if hasattr(self, "trainer") and self.trainer is not None else 0
         stats = TrainingStatistics(
-            global_step=self.trainer.global_step, nan_frequency=self.nan_counter
+            global_step=global_step, nan_frequency=self.nan_counter
         )
 
         training_configurations = {
@@ -859,6 +860,41 @@ class InterpretableMmdDetector(LegacyInterpretableMmdDetector):
                     loss=d_metric_val["loss"])        
             )
         # end if
+    # end def
+
+    def fit_pure_pytorch(
+        self,
+        max_epochs: int = 100,
+        accelerator: str = "auto",
+        callbacks: ty.Optional[ty.List[ty.Any]] = None,
+        check_val_every_n_epoch: int = 1,
+        use_fused_kernel: bool = False,
+        **kwargs: ty.Any
+    ) -> "InterpretableMmdDetector":
+        """Run pure PyTorch optimization directly on this detector, bypassing PyTorch Lightning.
+
+        Args:
+            max_epochs: Maximum epochs.
+            accelerator: 'auto', 'gpu', or 'cpu'.
+            callbacks: Optional list of callback instances (e.g. ConvergenceEarlyStop).
+            check_val_every_n_epoch: Validation check interval.
+            use_fused_kernel: If True, uses the fused Triton CUDA kernel.
+            **kwargs: Extra arguments passed to PurePytorchTrainer.
+
+        Returns:
+            self
+        """
+        from .pure_pytorch_trainer import PurePytorchTrainer
+        trainer = PurePytorchTrainer(
+            max_epochs=max_epochs,
+            accelerator=accelerator,
+            callbacks=callbacks,
+            check_val_every_n_epoch=check_val_every_n_epoch,
+            use_fused_kernel=use_fused_kernel,
+            **kwargs
+        )
+        trainer.fit(self)
+        return self
     # end def
 # end class
 
