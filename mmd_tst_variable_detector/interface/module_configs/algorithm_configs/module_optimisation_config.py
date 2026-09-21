@@ -15,6 +15,8 @@ from ....detection_algorithm.search_regularization_min_max import Regularization
 from ....detection_algorithm.early_stoppings import (
     ConvergenceEarlyStop,
     VariableEarlyStopping,
+    LegacyConvergenceEarlyStop,
+    LegacyVariableEarlyStopping,
     # ArdWeightsEarlyStopping
 )
 from ....detection_algorithm.pytorch_lightning_trainer import PytorchLightningDefaultArguments
@@ -48,7 +50,8 @@ class MmdOptimisationConfigTemplate(ABC):
     def get_configs(self,
                     path_work_dir: Path,
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
-                    resource_config_args: ResourceConfigArgs
+                    resource_config_args: ResourceConfigArgs,
+                    opt_option: ty.Optional[ty.Any] = None
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         raise NotImplementedError('This method must be implemented in the derived class.')
 # enc class
@@ -59,16 +62,32 @@ class MmdOptimisationConfigTemplate(ABC):
 class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
     def __init__(self,
                  is_show_progress_bar: bool = True,
-                 is_select_less_busy_cuda_device: bool = True
+                 is_select_less_busy_cuda_device: bool = True,
+                 trainer_backend: str = "pure_pytorch",
+                 matrix_computation: str = "auto",
+                 use_fused_kernel: ty.Optional[bool] = None,
+                 use_legacy_optimization: bool = False,
+                 opt_option: ty.Optional[ty.Any] = None,
                  ) -> None:
         super().__init__()
         self.is_select_less_busy_cuda_device = is_select_less_busy_cuda_device
         self.is_show_progress_bar = is_show_progress_bar
+        from ...interface_config_args import MmdOptimizationOption
+        if opt_option is not None:
+            self.opt_option = opt_option if isinstance(opt_option, MmdOptimizationOption) else MmdOptimizationOption(**opt_option)
+        else:
+            self.opt_option = MmdOptimizationOption(
+                trainer_backend=trainer_backend,
+                matrix_computation=matrix_computation,
+                use_fused_kernel=use_fused_kernel,
+                use_legacy_optimization=use_legacy_optimization,
+            )
 
     def get_configs(self,
                     path_work_dir: Path,
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
-                    resource_config_args: ResourceConfigArgs
+                    resource_config_args: ResourceConfigArgs,
+                    opt_option: ty.Optional[ty.Any] = None,
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         """The training configuration that I used in study-71.
         The configuration is based on the TPAMI draft (ver-1): https://arxiv.org/pdf/2311.01537#page=4.76
@@ -76,11 +95,28 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
         logger.warning('The configuration is based on the TPAMI draft (ver-1): https://arxiv.org/pdf/2311.01537#page=4.76')
         logger.warning('I forcely update parameters.')
 
-        early_stopper = ConvergenceEarlyStop(
-            check_span=100,  #  set in the paper draft. 
-            ignore_epochs=500,
-            threshold_convergence_ratio=0.001  # set in the paper draft.
-        )
+        from ...interface_config_args import MmdOptimizationOption
+        effective_opt: MmdOptimizationOption
+        if opt_option is not None:
+            effective_opt = opt_option if isinstance(opt_option, MmdOptimizationOption) else MmdOptimizationOption(**opt_option)
+        else:
+            effective_opt = self.opt_option
+        # end if
+        resolved_opt = effective_opt.resolve_for_accelerator(resource_config_args.train_accelerator)
+
+        if resolved_opt.use_legacy_optimization:
+            early_stopper = LegacyConvergenceEarlyStop(
+                check_span=100,
+                ignore_epochs=500,
+                threshold_convergence_ratio=0.001
+            )
+        else:
+            early_stopper = ConvergenceEarlyStop(
+                check_span=100,  #  set in the paper draft. 
+                ignore_epochs=500,
+                threshold_convergence_ratio=0.001  # set in the paper draft.
+            )
+        # end if
 
         if resource_config_args.train_accelerator == 'cuda':
             # note: the variable name is `n_device`, but it is device id.
@@ -102,14 +138,22 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
             enable_progress_bar=self.is_show_progress_bar,
             enable_model_summary=False,
             logger=None,
-            default_root_dir=path_work_dir
+            default_root_dir=path_work_dir,
+            trainer_backend=resolved_opt.trainer_backend,
+            matrix_computation=resolved_opt.matrix_computation,
+            use_fused_kernel=resolved_opt.use_fused_kernel,
+            use_legacy_optimization=resolved_opt.use_legacy_optimization,
         )
 
         base_training_parameter = InterpretableMmdTrainParameters(
             is_use_log=algorithm_config.batch_size,
             lr_scheduler=default_settings.lr_scheduler,
             lr_scheduler_monitor_on='train_loss',
-            optimizer_args={"lr": 0.01}  # set in the paper draft.
+            optimizer_args={"lr": 0.01},  # set in the paper draft.
+            trainer_backend=resolved_opt.trainer_backend,
+            matrix_computation=resolved_opt.matrix_computation,
+            use_fused_kernel=resolved_opt.use_fused_kernel,
+            use_legacy_optimization=resolved_opt.use_legacy_optimization,
         )
 
         reg_param_search_param = RegularizationSearchParameters(
@@ -150,15 +194,31 @@ class ConfigTPamiDraft(MmdOptimisationConfigTemplate):
 
 class ConfigRapid(MmdOptimisationConfigTemplate):
     def __init__(self,
-                 is_select_less_busy_cuda_device: bool = True) -> None:
+                 is_select_less_busy_cuda_device: bool = True,
+                 trainer_backend: str = "pure_pytorch",
+                 matrix_computation: str = "auto",
+                 use_fused_kernel: ty.Optional[bool] = None,
+                 use_legacy_optimization: bool = False,
+                 opt_option: ty.Optional[ty.Any] = None,
+                 ) -> None:
         super().__init__()
         self.is_select_less_busy_cuda_device = is_select_less_busy_cuda_device
-
+        from ...interface_config_args import MmdOptimizationOption
+        if opt_option is not None:
+            self.opt_option = opt_option if isinstance(opt_option, MmdOptimizationOption) else MmdOptimizationOption(**opt_option)
+        else:
+            self.opt_option = MmdOptimizationOption(
+                trainer_backend=trainer_backend,
+                matrix_computation=matrix_computation,
+                use_fused_kernel=use_fused_kernel,
+                use_legacy_optimization=use_legacy_optimization,
+            )
 
     def get_configs(self,
                     path_work_dir: Path,
                     algorithm_config: ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs],
-                    resource_config_args: ResourceConfigArgs
+                    resource_config_args: ResourceConfigArgs,
+                    opt_option: ty.Optional[ty.Any] = None,
                     ) -> ty.Tuple[CrossValidationTrainParameters, PytorchLightningDefaultArguments]:
         """The training configuration that I used in study-71.
         
@@ -166,11 +226,26 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
         ----------
         https://github.com/Kensuke-Mitsuzawa/mmd-tst-variable-detector/issues/71
         """        
-        # TODO Reset this config. Must be longer
-        seq_early_stopper = [
-            ConvergenceEarlyStop(check_span=100, ignore_epochs=200),
-            VariableEarlyStopping(ignore_epochs=600),
-        ]
+        from ...interface_config_args import MmdOptimizationOption
+        effective_opt: MmdOptimizationOption
+        if opt_option is not None:
+            effective_opt = opt_option if isinstance(opt_option, MmdOptimizationOption) else MmdOptimizationOption(**opt_option)
+        else:
+            effective_opt = self.opt_option
+        # end if
+        resolved_opt = effective_opt.resolve_for_accelerator(resource_config_args.train_accelerator)
+
+        if resolved_opt.use_legacy_optimization:
+            seq_early_stopper = [
+                LegacyConvergenceEarlyStop(check_span=100, ignore_epochs=200),
+                LegacyVariableEarlyStopping(ignore_epochs=600),
+            ]
+        else:
+            seq_early_stopper = [
+                ConvergenceEarlyStop(check_span=100, ignore_epochs=200),
+                VariableEarlyStopping(ignore_epochs=600),
+            ]
+        # end if
         
         if resource_config_args.train_accelerator == 'cuda':
             # note: the variable name is `n_device`, but it is device id.
@@ -191,7 +266,12 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
             enable_model_summary=False,
             logger=None,
             default_root_dir=path_work_dir,
-            devices=n_device)
+            devices=n_device,
+            trainer_backend=resolved_opt.trainer_backend,
+            matrix_computation=resolved_opt.matrix_computation,
+            use_fused_kernel=resolved_opt.use_fused_kernel,
+            use_legacy_optimization=resolved_opt.use_legacy_optimization,
+        )
         
         base_training_parameter = InterpretableMmdTrainParameters(
             is_use_log=algorithm_config.batch_size,
@@ -201,7 +281,12 @@ class ConfigRapid(MmdOptimisationConfigTemplate):
             n_workers_train_dataloader=algorithm_config.dataloader_n_workers_train_dataloader,
             n_workers_validation_dataloader=algorithm_config.dataloader_n_workers_validation_dataloader,
             dataloader_persistent_workers=algorithm_config.dataloader_persistent_workers,
-            limit_steps_early_stop_negative_mmd=3000)  # comment: 3000 for tmp setting
+            limit_steps_early_stop_negative_mmd=3000,
+            trainer_backend=resolved_opt.trainer_backend,
+            matrix_computation=resolved_opt.matrix_computation,
+            use_fused_kernel=resolved_opt.use_fused_kernel,
+            use_legacy_optimization=resolved_opt.use_legacy_optimization,
+        )
         
         assert resource_config_args.dask_config_detection is not None, 'resource_config_args.dask_config_detection is not None.'
         if isinstance(algorithm_config, CvSelectionConfigArgs):

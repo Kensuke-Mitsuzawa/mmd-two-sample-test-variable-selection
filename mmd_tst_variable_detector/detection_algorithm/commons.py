@@ -133,6 +133,12 @@ class InterpretableMmdTrainParameters(object):
     
     dataloader_persistent_workers: bool = False
 
+    # MMD optimization controls
+    trainer_backend: str = "pure_pytorch"
+    matrix_computation: str = "auto"
+    use_fused_kernel: ty.Optional[bool] = None
+    use_legacy_optimization: bool = False
+
     def __post_init__(self):
         if not isinstance(self.regularization_parameter, RegularizationParameter):
             if isinstance(self.regularization_parameter, (tuple, list)):

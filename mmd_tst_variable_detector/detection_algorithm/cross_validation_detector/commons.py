@@ -259,7 +259,7 @@ class RequestDistributedFunction:
     training_parameter: InterpretableMmdTrainParameters
     dataset_train: BaseDataset
     dataset_val: BaseDataset
-    trainer_lightning: pl.Trainer
+    trainer_lightning: ty.Any
     mmd_estimator: "BaseMmdEstimator"  # type: ignore
     stability_algorithm_param: CrossValidationAlgorithmParameter
 

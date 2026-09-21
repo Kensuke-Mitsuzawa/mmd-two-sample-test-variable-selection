@@ -22,6 +22,7 @@ from ..detection_algorithm.cross_validation_detector.commons import (
     CrossValidationAlgorithmParameter,
     AggregationKey,
 )
+from ..detection_algorithm.pytorch_lightning_trainer import get_mmd_detector_class
 from ..exceptions import OptimizationException
 
 logger = logging.getLogger(f"{__package__}.{__name__}")
@@ -66,7 +67,10 @@ def worker_execution_routine(args: RequestDistributedFunction) -> SubLearnerTrai
         dataset_val = __dataset_val.copy_dataset()
 
     try:
-        variable_detector = InterpretableMmdDetector(
+        use_legacy = getattr(training_parameter, "use_legacy_optimization", False) or \
+                     getattr(trainer_lightning, "use_legacy_optimization", False)
+        detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+        variable_detector = detector_cls(
             mmd_estimator=mmd_estimator,
             training_parameter=training_parameter,
             dataset_train=dataset_train,

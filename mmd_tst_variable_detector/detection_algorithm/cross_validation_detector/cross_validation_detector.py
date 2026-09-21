@@ -26,7 +26,11 @@ from ...utils.post_process_logger import PostProcessLoggerHandler
 
 from ..base import BaseVariableDetector
 from ..interpretable_mmd_detector import InterpretableMmdDetector
-from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments 
+from ..pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+) 
 from ..commons import (
     InterpretableMmdTrainResult, 
     RegularizationParameter,
@@ -97,7 +101,10 @@ def post_ard_weight_optimization_hard(selected_indexes: ty.List[int],
         validation_dataset = validation_dataset
     # end if
 
-    sub_leaner = InterpretableMmdDetector(
+    use_legacy = getattr(training_parameter.base_training_parameter, "use_legacy_optimization", False) or \
+                 getattr(pytorch_trainer_config, "use_legacy_optimization", False)
+    detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+    sub_leaner = detector_cls(
         mmd_estimator=estimator_copy,
         training_parameter=training_parameter.base_training_parameter,
         dataset_train=training_dataset,
@@ -105,8 +112,11 @@ def post_ard_weight_optimization_hard(selected_indexes: ty.List[int],
     )
 
     try:
-        # trainer_lightning = copy.deepcopy(self.trainer_lightning)
-        trainer_lightning = pl.Trainer(**asdict(pytorch_trainer_config))
+        trainer_lightning = create_mmd_trainer(
+            trainer_config=pytorch_trainer_config,
+            trainer_backend=getattr(training_parameter.base_training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(training_parameter.base_training_parameter, "use_fused_kernel", None),
+        )
         trainer_lightning.fit(model=sub_leaner)
         training_log = sub_leaner.get_trained_variables()
 
@@ -152,15 +162,21 @@ def post_ard_weight_optimization_soft(score_aggregated: CrossValidationAggregate
             training_dataset = training_dataset
         # end if
 
-        sub_leaner = InterpretableMmdDetector(
+        use_legacy = getattr(training_parameter.base_training_parameter, "use_legacy_optimization", False) or \
+                     getattr(pytorch_trainer_config, "use_legacy_optimization", False)
+        detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+        sub_leaner = detector_cls(
             mmd_estimator=estimator_copy,
             training_parameter=training_parameter.base_training_parameter,
             dataset_train=training_dataset,
             dataset_validation=validation_dataset  # type: ignore
         )
 
-        # trainer_lightning = copy.deepcopy(self.trainer_lightning)
-        trainer_lightning = pl.Trainer(**asdict(pytorch_trainer_config))
+        trainer_lightning = create_mmd_trainer(
+            trainer_config=pytorch_trainer_config,
+            trainer_backend=getattr(training_parameter.base_training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(training_parameter.base_training_parameter, "use_fused_kernel", None),
+        )
         trainer_lightning.fit(model=sub_leaner)
         training_log = sub_leaner.get_trained_variables()
         
@@ -307,15 +323,21 @@ class CrossValidationInterpretableVariableDetector(BaseVariableDetector):
             validation_dataset = validation_dataset
         # end if
 
-        sub_leaner = InterpretableMmdDetector(
+        use_legacy = getattr(self.training_parameter.base_training_parameter, "use_legacy_optimization", False) or \
+                     getattr(self.pytorch_trainer_config, "use_legacy_optimization", False)
+        detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+        sub_leaner = detector_cls(
             mmd_estimator=estimator_copy,
             training_parameter=self.training_parameter.base_training_parameter,
             dataset_train=training_dataset,
             dataset_validation=validation_dataset
         )
 
-        # trainer_lightning = copy.deepcopy(self.trainer_lightning)
-        trainer_lightning = pl.Trainer(**asdict(self.pytorch_trainer_config))
+        trainer_lightning = create_mmd_trainer(
+            trainer_config=self.pytorch_trainer_config,
+            trainer_backend=getattr(self.training_parameter.base_training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(self.training_parameter.base_training_parameter, "use_fused_kernel", None),
+        )
         trainer_lightning.fit(model=sub_leaner)
         training_log = sub_leaner.get_trained_variables()
 

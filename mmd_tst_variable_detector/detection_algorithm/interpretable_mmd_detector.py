@@ -50,7 +50,7 @@ class BaseInterpretableMmdDetector(abc.ABC):
 
 
 
-class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector):
+class LegacyInterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector):
     def __init__(
         self,
         mmd_estimator: BaseMmdEstimator,
@@ -151,7 +151,7 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
         self.dataset_validation.close()
         self.save_hyperparameters()
 
-    def copy_detector(self) -> "InterpretableMmdDetector":
+    def copy_detector(self) -> "LegacyInterpretableMmdDetector":
         """Copy the detector itself. Do copy-job when you copy dataset object.
         """
         dataset_train = self.dataset_train.copy_dataset()
@@ -603,8 +603,9 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
         """
         __ard_kernel_k = self.mmd_estimator.kernel_obj.ard_weights.detach().cpu()
 
+        global_step = getattr(self.trainer, "global_step", 0) if hasattr(self, "trainer") and self.trainer is not None else 0
         stats = TrainingStatistics(
-            global_step=self.trainer.global_step, nan_frequency=self.nan_counter
+            global_step=global_step, nan_frequency=self.nan_counter
         )
 
         training_configurations = {
@@ -624,6 +625,278 @@ class InterpretableMmdDetector(pl.LightningModule, BaseInterpretableMmdDetector)
             training_configurations=training_configurations,
             mmd_estimator_hyperparameters=mmd_estimator_hyperparameters
         )
+
+
+
+class InterpretableMmdDetector(LegacyInterpretableMmdDetector):
+    """High-performance GPU & CPU optimized Interpretable MMD Detector.
+
+    Optimizations:
+    - Retains loss trajectories on self.device (GPU VRAM or CPU RAM) without blocking host-device transfers.
+    - Eliminates per-epoch synchronous .item() calls on loss/metric tensors; only extracts floats when logging is requested or training ends.
+    - Conditionally enables pin_memory on DataLoader for CUDA acceleration.
+    - Compatible with ConvergenceEarlyStop running directly on GPU/CPU.
+    """
+
+    def copy_detector(self) -> "InterpretableMmdDetector":
+        """Copy detector with cloned datasets."""
+        dataset_train = self.dataset_train.copy_dataset()
+        dataset_validation = self.dataset_validation.copy_dataset()
+        self.dataset_train = dataset_train
+        self.dataset_validation = dataset_validation
+        return copy.deepcopy(self)
+    # end def
+
+    def setup(self, stage: str) -> None:
+        super().setup(stage)
+        max_epochs: int = self.trainer.max_epochs  # type: ignore
+        assert max_epochs > 0, "max_epochs must be greater than 0."
+        self.loss_training = torch.zeros(max_epochs, device=self.device)
+        self.loss_validation = torch.zeros(max_epochs, device=self.device)
+        self._current_metric_tensors_training: ty.Dict[str, ty.Union[int, torch.Tensor]] = {}
+        self._current_metric_tensors_validation: ty.Dict[str, ty.Union[int, torch.Tensor]] = {}
+    # end def
+
+    def train_dataloader(self) -> DataLoader:
+        if self.training_parameter.batch_size == -1:
+            batch_size = len(self.dataset_train)
+        else:
+            batch_size = self.training_parameter.batch_size
+        # end if
+        return DataLoader(
+            self.dataset_train,
+            batch_size=batch_size,
+            shuffle=self.is_shuffle_dataset,
+            num_workers=self.training_parameter.n_workers_train_dataloader,
+            persistent_workers=self.training_parameter.dataloader_persistent_workers,
+            pin_memory=(self.device.type == "cuda"),
+        )
+    # end def
+
+    def val_dataloader(self) -> DataLoader:
+        if self.training_parameter.batch_size == -1:
+            batch_size = len(self.dataset_validation)
+        else:
+            batch_size = self.training_parameter.batch_size
+        # end if
+        return DataLoader(
+            self.dataset_validation,
+            batch_size=batch_size,
+            shuffle=self.is_shuffle_dataset,
+            num_workers=self.training_parameter.n_workers_validation_dataloader,
+            persistent_workers=self.training_parameter.dataloader_persistent_workers,
+            pin_memory=(self.device.type == "cuda"),
+        )
+    # end def
+
+    def training_step(
+        self,
+        batch: ty.Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int
+    ) -> ty.Optional[ty.Dict[str, torch.Tensor]]:
+        reg_term = self.generate_regularization_term(
+            self.training_parameter.regularization_parameter
+        )
+        mmd_variable = self.forward(x=batch[0], y=batch[1])
+        obj_reg = self.function_loss(mmd_variable, reg_term)
+
+        if self.training_parameter.limit_steps_early_stop_negative_mmd > 0:
+            if mmd_variable.mmd < 0.0:
+                self._LegacyInterpretableMmdDetector__count_continious_negative_mmd += 1
+                self._LegacyInterpretableMmdDetector__is_activate_early_stopping()
+            else:
+                self._LegacyInterpretableMmdDetector__count_continious_negative_mmd = 0
+            # end if
+        # end if
+
+        if torch.isnan(obj_reg):
+            self._LegacyInterpretableMmdDetector__count_continious_nan += 1
+            self._LegacyInterpretableMmdDetector__is_activate_early_stopping()
+            self.nan_counter += 1
+            if self.is_debug:
+                kernel_obj: BaseKernel = copy.deepcopy(self.mmd_estimator.kernel_obj)
+                kernel_obj.ard_weights.requires_grad = False
+                __mmd_values = MmdValues(
+                    mmd=mmd_variable.mmd.detach(),
+                    variance=mmd_variable.ratio.detach(),
+                    ratio=mmd_variable.variance.detach(),
+                    kernel_matrix_obj=mmd_variable.kernel_matrix_obj)
+                debug_obj = DebugContainerNan(
+                    epoch=self.trainer.current_epoch,
+                    global_step=self.trainer.global_step,
+                    mmd_values=__mmd_values,
+                    batch_xy=(batch[0], batch[1]))
+                self.steps_nan_obj.append(debug_obj)
+            # end if
+            return None
+        else:
+            self._LegacyInterpretableMmdDetector__count_continious_nan = 0
+            __values = {
+                "loss": obj_reg,
+                "mmd2": mmd_variable.mmd,
+                "ratio": mmd_variable.ratio,
+                "variance": mmd_variable.variance,
+            }
+            self.training_step_outputs.append(__values)
+            return __values
+        # end if
+    # end def
+
+    def on_train_epoch_end(self) -> None:
+        if len(self.training_step_outputs) > 0:
+            loss_mean = torch.stack([d["loss"] for d in self.training_step_outputs]).mean()
+            mmd_mean = torch.stack([d["mmd2"] for d in self.training_step_outputs]).mean()
+            var_mean = torch.stack([d["variance"] for d in self.training_step_outputs]).mean()
+            ratio_mean = torch.stack([d["ratio"] for d in self.training_step_outputs]).mean()
+
+            self.log_dict({
+                "epoch": self.trainer.current_epoch,
+                "train_loss": loss_mean,
+                "train_mmd2": mmd_mean,
+                "train_variance": var_mean,
+                "train_ratio": ratio_mean,
+                "lr": self.trainer.optimizers[0].param_groups[0]["lr"]
+            }, on_step=False, on_epoch=True)
+
+            self.loss_training[self.trainer.current_epoch] = loss_mean.detach()
+
+            self._current_metric_tensors_training = {
+                "epoch": self.trainer.current_epoch,
+                "loss": loss_mean.detach(),
+                "mmd2": mmd_mean.detach(),
+                "variance": var_mean.detach(),
+                "ratio": ratio_mean.detach(),
+            }
+
+            is_record_training_log = (self.training_parameter.frequency_epoch_trajectory_record > 0) and \
+                (self.trainer.current_epoch % self.training_parameter.frequency_epoch_trajectory_record == 0)
+
+            if is_record_training_log:
+                self.stack_training_log.append(
+                    TrajectoryRecord(
+                        self.current_epoch,
+                        mmd_mean.detach().item(),
+                        var_mean.detach().item(),
+                        ratio_mean.detach().item(),
+                        loss_mean.detach().item()))
+            # end if
+        # end if
+        self.training_step_outputs = []
+    # end def
+
+    def on_validation_epoch_end(self) -> None:
+        if len(self.validation_step_outputs) > 0:
+            loss_mean = torch.stack([d["loss"] for d in self.validation_step_outputs]).mean()
+            mmd_mean = torch.stack([d["mmd2"] for d in self.validation_step_outputs]).mean()
+            var_mean = torch.stack([d["variance"] for d in self.validation_step_outputs]).mean()
+            ratio_mean = torch.stack([d["ratio"] for d in self.validation_step_outputs]).mean()
+
+            self.log_dict({
+                "epoch": self.trainer.current_epoch,
+                "val_loss": loss_mean,
+                "val_mmd2": mmd_mean,
+                "val_variance": var_mean,
+                "val_ratio": ratio_mean,
+            }, on_step=False, on_epoch=True)
+
+            self.loss_validation[self.trainer.current_epoch] = loss_mean.detach()
+
+            self._current_metric_tensors_validation = {
+                "epoch": self.trainer.current_epoch,
+                "loss": loss_mean.detach(),
+                "mmd2": mmd_mean.detach(),
+                "variance": var_mean.detach(),
+                "ratio": ratio_mean.detach(),
+            }
+
+            is_log_epoch = self.trainer.current_epoch % self.training_parameter.frequency_epoch_trajectory_record == 0
+            if self.training_parameter.frequency_epoch_trajectory_record > 0 and (is_log_epoch or self.trainer.check_val_every_n_epoch > 1):
+                self.stack_validation_log.append(
+                    TrajectoryRecord(
+                        self.current_epoch,
+                        mmd_mean.detach().item(),
+                        var_mean.detach().item(),
+                        ratio_mean.detach().item(),
+                        loss_mean.detach().item()))
+            # end if
+        # end if
+        self.validation_step_outputs = []
+    # end def
+
+    def on_train_end(self) -> None:
+        if hasattr(self, "_current_metric_tensors_training") and self._current_metric_tensors_training:
+            self.current_mean_metric_training = {
+                k: (v.item() if isinstance(v, torch.Tensor) else v)
+                for k, v in self._current_metric_tensors_training.items()
+            }
+        # end if
+        if hasattr(self, "_current_metric_tensors_validation") and self._current_metric_tensors_validation:
+            self.current_mean_metric_validation = {
+                k: (v.item() if isinstance(v, torch.Tensor) else v)
+                for k, v in self._current_metric_tensors_validation.items()
+            }
+        # end if
+
+        d_metric_train = self.current_mean_metric_training
+        d_metric_val = self.current_mean_metric_validation
+
+        if d_metric_train and not self.stack_training_log:
+            self.stack_training_log.append(
+                TrajectoryRecord(
+                    epoch=int(d_metric_train["epoch"]),
+                    mmd=d_metric_train["mmd2"],
+                    var=d_metric_train["variance"],
+                    ratio=d_metric_train["ratio"],
+                    loss=d_metric_train["loss"])
+            )
+        # end if
+        if d_metric_val and not self.stack_validation_log:
+            self.stack_validation_log.append(
+                TrajectoryRecord(
+                    epoch=int(d_metric_val["epoch"]),
+                    mmd=d_metric_val["mmd2"],
+                    var=d_metric_val["variance"],
+                    ratio=d_metric_val["ratio"],
+                    loss=d_metric_val["loss"])        
+            )
+        # end if
+    # end def
+
+    def fit_pure_pytorch(
+        self,
+        max_epochs: int = 100,
+        accelerator: str = "auto",
+        callbacks: ty.Optional[ty.List[ty.Any]] = None,
+        check_val_every_n_epoch: int = 1,
+        use_fused_kernel: bool = False,
+        **kwargs: ty.Any
+    ) -> "InterpretableMmdDetector":
+        """Run pure PyTorch optimization directly on this detector, bypassing PyTorch Lightning.
+
+        Args:
+            max_epochs: Maximum epochs.
+            accelerator: 'auto', 'gpu', or 'cpu'.
+            callbacks: Optional list of callback instances (e.g. ConvergenceEarlyStop).
+            check_val_every_n_epoch: Validation check interval.
+            use_fused_kernel: If True, uses the fused Triton CUDA kernel.
+            **kwargs: Extra arguments passed to PurePytorchTrainer.
+
+        Returns:
+            self
+        """
+        from .pure_pytorch_trainer import PurePytorchTrainer
+        trainer = PurePytorchTrainer(
+            max_epochs=max_epochs,
+            accelerator=accelerator,
+            callbacks=callbacks,
+            check_val_every_n_epoch=check_val_every_n_epoch,
+            use_fused_kernel=use_fused_kernel,
+            **kwargs
+        )
+        trainer.fit(self)
+        return self
+    # end def
+# end class
 
 
 
@@ -752,4 +1025,5 @@ def tune_dataset_batch_size(
 # ---------------------------------------------------------------------------
 # For older version
 
+LegacyMmdVariableTrainer = LegacyInterpretableMmdDetector
 MmdVariableTrainer = InterpretableMmdDetector

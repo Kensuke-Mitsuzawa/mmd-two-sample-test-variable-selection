@@ -22,7 +22,10 @@ from ..search_regularization_min_max import (
     # hueristic_approach,
     hueristic_approach_dask
     )
-from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments 
+from ..pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+) 
 from ..commons import (
     RegularizationParameter,
     InterpretableMmdTrainParameters
@@ -199,7 +202,11 @@ class SubModuleCrossValidationFixedRange(object):
             __copy_pytorch_trainer_config: PytorchLightningDefaultArguments = copy.deepcopy(self.pytorch_trainer_config)
             __copy_pytorch_trainer_config.default_root_dir = __path_default_root_dir
             
-            __trainer_lightning = pl.Trainer(**asdict(__copy_pytorch_trainer_config))
+            __trainer_lightning = create_mmd_trainer(
+                trainer_config=__copy_pytorch_trainer_config,
+                trainer_backend=getattr(__parameter, "trainer_backend", None),
+                use_fused_kernel=getattr(__parameter, "use_fused_kernel", None),
+            )
         
             __mmd_estimator = copy.deepcopy(self.estimator)
         

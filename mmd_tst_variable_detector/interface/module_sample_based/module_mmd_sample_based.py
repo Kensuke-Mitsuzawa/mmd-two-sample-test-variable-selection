@@ -161,6 +161,15 @@ def __main_run(dataset_train: BaseDataset,
         initial_value = mmd_estimator_config.ard_weights_initial.numpy()
     # end if
     
+    # Resolve MMD optimization option
+    opt_option = getattr(training_conf_args.detector_algorithm_config_args, "mmd_optimization_option", None)
+    if opt_option is not None:
+        resolved_opt = opt_option.resolve_for_accelerator(training_conf_args.resource_config_args.train_accelerator)
+        use_fused_kernel = resolved_opt.use_fused_kernel
+    else:
+        use_fused_kernel = False
+    # end if
+
     # initialization of Kernel instance.
     __length_scale_given = mmd_estimator_config.length_scale if isinstance(mmd_estimator_config.length_scale, torch.Tensor) else None
     kernel = QuadraticKernelGaussianKernel.from_dataset(
@@ -168,7 +177,8 @@ def __main_run(dataset_train: BaseDataset,
         ard_weights=torch.from_numpy(initial_value),
         heuristic_operation=mmd_estimator_config.aggregation_kernel_length_scale,
         is_dimension_median_heuristic=mmd_estimator_config.is_dimension_median_heuristic,
-        bandwidth=__length_scale_given)
+        bandwidth=__length_scale_given,
+        use_fused_kernel=use_fused_kernel)
     # initialization of MMD instance.
     mmd_estimator = QuadraticMmdEstimator(
         kernel_obj=kernel,
@@ -181,7 +191,8 @@ def __main_run(dataset_train: BaseDataset,
     cv_train_param, pl_param = training_conf_args.detector_algorithm_config_args.mmd_optimiser_configs.get_configs(
         path_work_dir=path_dir_model,
         algorithm_config=mmd_config_args,
-        resource_config_args=training_conf_args.resource_config_args)
+        resource_config_args=training_conf_args.resource_config_args,
+        opt_option=opt_option)
     
     # setting MLFlow logger
     post_process_handler = PostProcessLoggerHandler(

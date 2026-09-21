@@ -21,7 +21,11 @@ from ...utils import detect_variables
 from ...mmd_estimator.mmd_estimator import BaseMmdEstimator
 from ...datasets import BaseDataset
 from ...exceptions import ParameterSearchException
-from ..pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from ..pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from ..interpretable_mmd_detector import InterpretableMmdDetector
 from ..commons import (
     RegularizationParameter, 
@@ -265,13 +269,19 @@ def __execute_mmd_opt_without_regularization(dataset_all: BaseDataset,
             __dataset_all = dataset_all
         # end if
         new_training_param = copy.deepcopy(base_training_parameter)
-        new_training_param.regularization_parameter = RegularizationParameter(0.0, 0.0)
-        variable_trainer = InterpretableMmdDetector(
+        use_legacy = getattr(new_training_param, "use_legacy_optimization", False) or \
+                     getattr(pytorch_trainer_config, "use_legacy_optimization", False)
+        detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+        variable_trainer = detector_cls(
             mmd_estimator=mmd_estimator,
             training_parameter=new_training_param,
             dataset_train=__dataset_all,
             dataset_validation=__dataset_all)
-        trainer_pl = pl.Trainer(**asdict(pytorch_trainer_config))
+        trainer_pl = create_mmd_trainer(
+            trainer_config=pytorch_trainer_config,
+            trainer_backend=getattr(new_training_param, "trainer_backend", None),
+            use_fused_kernel=getattr(new_training_param, "use_fused_kernel", None),
+        )
         trainer_pl.fit(variable_trainer)
     except OptimizationException as e:
         raise OptimizationException(f'OptimizationException: {e}.'

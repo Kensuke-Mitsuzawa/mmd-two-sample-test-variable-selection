@@ -23,7 +23,11 @@ from ..utils import (
     PermutationTest)
 
 from .base import BaseVariableDetector
-from .pytorch_lightning_trainer import PytorchLightningDefaultArguments
+from .pytorch_lightning_trainer import (
+    PytorchLightningDefaultArguments,
+    create_mmd_trainer,
+    get_mmd_detector_class,
+)
 from .interpretable_mmd_detector import (
     InterpretableMmdTrainResult, 
     InterpretableMmdTrainParameters)
@@ -83,14 +87,21 @@ class BaselineMmdVariableDetector(BaseVariableDetector):
         """Run baseline MMD optimization for variable detection."""
         test_data = dataset_test if dataset_test is not None else self.dataset_test
 
-        variable_detector = InterpretableMmdDetector(
+        use_legacy = getattr(self.training_parameter, "use_legacy_optimization", False) or \
+                     (getattr(self.pytorch_trainer_config, "use_legacy_optimization", False) if self.pytorch_trainer_config is not None else False)
+        detector_cls = get_mmd_detector_class(use_legacy_optimization=use_legacy)
+        variable_detector = detector_cls(
             mmd_estimator=deepcopy(self.estimator),
             training_parameter=self.training_parameter,
             dataset_train=training_dataset,
             dataset_validation=training_dataset if validation_dataset is None else validation_dataset,
         )
         trainer_config = self.pytorch_trainer_config if self.pytorch_trainer_config is not None else PytorchLightningDefaultArguments()
-        pl_trainer_obj = pl.Trainer(**trainer_config.as_dict())
+        pl_trainer_obj = create_mmd_trainer(
+            trainer_config=trainer_config,
+            trainer_backend=getattr(self.training_parameter, "trainer_backend", None),
+            use_fused_kernel=getattr(self.training_parameter, "use_fused_kernel", None),
+        )
         pl_trainer_obj.fit(variable_detector)
 
         detection_result_obj = variable_detector.get_trained_variables()

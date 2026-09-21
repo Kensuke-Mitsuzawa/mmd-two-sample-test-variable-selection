@@ -6,7 +6,8 @@ from .data_objects import (
 from .module_configs import *
 from .interface_config_args import (
     InterfaceConfigArgs,
-    DetectorAlgorithmConfigArgs
+    DetectorAlgorithmConfigArgs,
+    MmdOptimizationOption
 )
 from .data_objects import (
     BasicVariableSelectionResult,

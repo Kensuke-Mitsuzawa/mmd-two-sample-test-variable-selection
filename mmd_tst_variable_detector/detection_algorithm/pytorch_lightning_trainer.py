@@ -56,10 +56,73 @@ class PytorchLightningDefaultArguments:
     sync_batchnorm: bool = False
     reload_dataloaders_every_n_epochs: int = 0
     default_root_dir: Optional[Path] = None
+
+    # MMD optimization controls
+    trainer_backend: str = "pure_pytorch"
+    matrix_computation: str = "auto"
+    use_fused_kernel: ty.Optional[bool] = None
+    use_legacy_optimization: bool = False
     
     def __post_process__(self):
         if self.default_root_dir is None:
             self.default_root_dir = Path('/tmp/mmd-tst-variable-detector') / datetime.now().isoformat()
     
     def as_dict(self):
-        return dataclasses.asdict(self)
+        d = dataclasses.asdict(self)
+        for key in ("trainer_backend", "matrix_computation", "use_fused_kernel", "use_legacy_optimization"):
+            d.pop(key, None)
+        return d
+
+
+def create_mmd_trainer(
+    trainer_config: ty.Optional[PytorchLightningDefaultArguments] = None,
+    trainer_backend: ty.Optional[str] = None,
+    use_fused_kernel: ty.Optional[bool] = None,
+    **kwargs: ty.Any,
+) -> ty.Any:
+    """Factory creating either PurePytorchTrainer or pytorch_lightning.Trainer."""
+    import pytorch_lightning as pl
+    from .pure_pytorch_trainer import PurePytorchTrainer
+
+    if trainer_config is None:
+        trainer_config = PytorchLightningDefaultArguments()
+    # end if
+
+    backend = trainer_backend or getattr(trainer_config, "trainer_backend", "pure_pytorch")
+    fused = use_fused_kernel if use_fused_kernel is not None else getattr(trainer_config, "use_fused_kernel", False)
+
+    if backend == "pure_pytorch":
+        acc = str(trainer_config.accelerator).lower() if trainer_config.accelerator is not None else "auto"
+        devices = trainer_config.devices
+        if devices == "auto":
+            devices = 1
+        elif isinstance(devices, list) and len(devices) > 0:
+            devices = devices[0]
+        # end if
+        return PurePytorchTrainer(
+            max_epochs=trainer_config.max_epochs,
+            accelerator=acc,
+            devices=devices,
+            callbacks=trainer_config.callbacks,
+            check_val_every_n_epoch=trainer_config.check_val_every_n_epoch,
+            use_fused_kernel=bool(fused),
+            enable_progress_bar=bool(trainer_config.enable_progress_bar),
+            logger=bool(trainer_config.logger),
+            **kwargs,
+        )
+    else:
+        cfg_dict = trainer_config.as_dict()
+        cfg_dict.update(kwargs)
+        return pl.Trainer(**cfg_dict)
+    # end if
+
+
+def get_mmd_detector_class(use_legacy_optimization: bool = False) -> ty.Union["LegacyInterpretableMmdDetector", "InterpretableMmdDetector"]:
+    """Return LegacyInterpretableMmdDetector or InterpretableMmdDetector based on flag."""
+    from .interpretable_mmd_detector import (
+        LegacyInterpretableMmdDetector,
+        InterpretableMmdDetector,
+    )
+    if use_legacy_optimization:
+        return LegacyInterpretableMmdDetector
+    return InterpretableMmdDetector
