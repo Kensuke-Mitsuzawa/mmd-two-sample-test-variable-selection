@@ -32,7 +32,12 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(obj, Path):
             return obj.as_posix()
         if isinstance(obj, np.ndarray):
-            return obj.tolist()        
+            return obj.tolist()
+        if isinstance(obj, torch.Tensor):
+            return obj.tolist()
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        return super().default(obj)
 
 @dataclass
 class BasicVariableSelectionResult:
@@ -77,7 +82,7 @@ class OutputObject:
     
     def as_json(self) -> str:
         if isinstance(self.detection_result_sample_based, BasicVariableSelectionResult):
-            detection_result = asdict(self.detection_result_sample_based)
+            detection_result = self.detection_result_sample_based.as_dict()
         # elif isinstance(self.detection_result_time_slicing, list):
         #     detection_result =[asdict(__d) for __d in self.detection_result_time_slicing]
         else:

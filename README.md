@@ -31,19 +31,14 @@ Please refer to either of these works.
 
 # Install
 
-This project is with `poetry`. I recommend to use a virtual environment created by poetry.
+This project is with `uv`. I recommend to use a virtual environment created by uv.
 
 ```
-poetry install
+uv sync
 ```
 
-To enter in poetry shell, `poetry shell`.
+To enter in uv shell, `uv shell`.
 
-To install all packages including ones for experiments,
-
-```
-poetry install --extras "dask_visual experiment_package"
-```
 
 # Examples code
 

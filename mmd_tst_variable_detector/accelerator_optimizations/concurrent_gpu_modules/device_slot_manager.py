@@ -44,6 +44,9 @@ class DeviceSlotManager(object):
                     "nthreads": 1,
                     "env": {
                         "CUDA_VISIBLE_DEVICES": str(gpu_id),
+                        "OMP_NUM_THREADS": "1",
+                        "MKL_NUM_THREADS": "1",
+                        "OPENBLAS_NUM_THREADS": "1",
                     },
                 }
                 if memory_limit is not None:
@@ -91,6 +94,22 @@ class DeviceSlotManager(object):
             f"Launching SpecCluster with {len(worker_specs)} workers across {n_gpus} GPU(s) "
             f"({k_slots_per_gpu} slots/GPU)..."
         )
+        scheduler_spec = cluster_kwargs.pop("scheduler", None)
+        dashboard_address = cluster_kwargs.pop("dashboard_address", None)
+        scheduler_options = cluster_kwargs.pop("scheduler_options", {})
+        if dashboard_address is not None:
+            scheduler_options["dashboard_address"] = dashboard_address
+        # end if
+        if scheduler_spec is None and scheduler_options:
+            from distributed import Scheduler
+            scheduler_spec = {"cls": Scheduler, "options": scheduler_options}
+        elif isinstance(scheduler_spec, dict) and scheduler_options:
+            scheduler_spec.setdefault("options", {}).update(scheduler_options)
+        # end if
+        if scheduler_spec is not None:
+            cluster_kwargs["scheduler"] = scheduler_spec
+        # end if
+
         cluster = SpecCluster(workers=worker_specs, **cluster_kwargs)
         client = Client(cluster)
         logger.info(f"SpecCluster initialized. Client address: {client.scheduler.address}")

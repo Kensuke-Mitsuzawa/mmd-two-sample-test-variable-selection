@@ -4763,7 +4763,7 @@ wheels = [
 
 [[package]]
 name = "mmd-tst-variable-detector"
-version = "1.6.0"
+version = "1.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "dacite" },

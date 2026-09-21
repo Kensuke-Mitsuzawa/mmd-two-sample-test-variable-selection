@@ -1,12 +1,19 @@
+import os
+# Prevent thread explosion in constrained environments
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 from pathlib import Path
 import typing as ty
 import toml
 from tqdm import tqdm
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 import torch
+torch.set_num_threads(1)
 import pytorch_lightning as pl
 
 import logzero
@@ -82,8 +89,8 @@ class PicturesDatasetGenerator(object):
         path_file_x = self.seq_files_x[idx]
         path_file_y = self.seq_files_y[idx]
 
-        array_x = self.__func_overlay_detected_variables(path_file_x)
-        array_y = self.__func_overlay_detected_variables(path_file_y)
+        array_x = self.__func_overlay_detected_variables(path_file_x).astype(np.float32) / 255.0
+        array_y = self.__func_overlay_detected_variables(path_file_y).astype(np.float32) / 255.0
 
         return torch.from_numpy(array_x), torch.from_numpy(array_y)
 
@@ -140,6 +147,7 @@ class DataGenerationConfig:
 @dataclass
 class MmdBaselineConfig:
     MAX_EPOCH: int = 9999
+
     
 @dataclass
 class CvSelectionConfig:
@@ -155,24 +163,48 @@ class CvSelectionConfig:
 
 @dataclass
 class ComputationalResourceConfig:
-    train_accelerator: str = 'cpu'
+    train_accelerator: str = 'gpu'
 
-    distributed_mode: str = 'single'
-    dask_n_workers: int = 8
+    # 'dask' enables concurrent-GPU multi-slot execution via ConcurrentGpuTaskDispatcher
+    distributed_mode: str = 'dask'
+    k_slots_per_gpu: int = 2
+    dask_n_workers: int = 2
     dask_threads_per_worker: int = 1
+    dask_scheduler_host: ty.Optional[str] = '0.0.0.0'
+    dask_scheduler_port: int = 8786
+    dask_dashboard_address: str = ':8787'
 
     def __post_init__(self):
-        assert self.train_accelerator in ['cpu', 'cuda']
+        self.train_accelerator = self.train_accelerator.lower()
+        assert self.train_accelerator in ['cpu', 'cuda', 'gpu', 'auto']
+        assert self.distributed_mode in ['single', 'dask']
+
+
+@dataclass
+class ApproachConfig:
+    approach_data_representation: str = "sample_based"
+    approach_interpretable_mmd: str = "cv_selection"
+
+
+@dataclass
+class MmdOptimizationConfig:
+    trainer_backend: str = "pure_pytorch"
+    matrix_computation: str = "auto"
+    use_fused_kernel: ty.Optional[bool] = None
+    use_legacy_optimization: bool = False
+
 
 @dataclass
 class RootConfig:
     base: BaseConfig
     data_setting: DataSettingConfig
     data_generation: DataGenerationConfig
-    mmd_baseline: MmdBaselineConfig
-    cv_selection: CvSelectionConfig
-    computational_resource: ComputationalResourceConfig
-    detection_approaches: ty.List[str] = ACCEPTABLE_METHODS
+    computational_resource: ComputationalResourceConfig = field(default_factory=ComputationalResourceConfig)
+    approach: ApproachConfig = field(default_factory=ApproachConfig)
+    mmd_optimization: MmdOptimizationConfig = field(default_factory=MmdOptimizationConfig)
+    mmd_baseline: MmdBaselineConfig = field(default_factory=MmdBaselineConfig)
+    cv_selection: CvSelectionConfig = field(default_factory=CvSelectionConfig)
+    detection_approaches: ty.List[str] = field(default_factory=lambda: list(ACCEPTABLE_METHODS))
     dataset_type_backend: str = 'ram'
     is_pre_reload_dataset: bool = True
 
@@ -185,6 +217,8 @@ class RootConfig:
 
 
 import dacite
+from mmd_tst_variable_detector.interface.module_configs.algorithm_configs.algorithm_config import BaselineMmdConfigArgs
+
 
 def main(path_toml_config: Path):
     assert path_toml_config.exists(), f'Not found: {path_toml_config}'
@@ -236,14 +270,13 @@ def main(path_toml_config: Path):
         __path_y = __path_data_dir / 'y.pt'
         
         if config_obj.is_pre_reload_dataset:
-            __x = torch.load(__path_x)['array']
-            __y = torch.load(__path_y)['array']
+            __x = __pair_xy[0]
+            __y = __pair_xy[1]
             seq_x_train.append(__x)
             seq_y_train.append(__y)
         else:
             torch.save({'array': __pair_xy[0]}, __path_x)
             torch.save({'array': __pair_xy[1]}, __path_y)
-        
             seq_path_xy_train.append(__path_data_dir)
         # end if
     # end for
@@ -261,14 +294,13 @@ def main(path_toml_config: Path):
         __path_y = __path_data_dir / 'y.pt'
         
         if config_obj.is_pre_reload_dataset:
-            __x = torch.load(__path_x)['array']
-            __y = torch.load(__path_y)['array']
+            __x = __pair_xy[0]
+            __y = __pair_xy[1]
             seq_x_test.append(__x)
             seq_y_test.append(__y)
         else:
             torch.save({'array': __pair_xy[0]}, __path_x)
             torch.save({'array': __pair_xy[1]}, __path_y)
-            
             seq_path_xy_test.append(__path_data_dir)
         # end if
     # end for
@@ -287,22 +319,30 @@ def main(path_toml_config: Path):
         tensor_y_test = torch.stack(seq_y_test)
         
         data_config_args = DataSetConfigArgs(
-                data_x_train=tensor_x_train,
-                data_y_train=tensor_y_train,
-                data_x_test=tensor_x_test,
-                data_y_test=tensor_y_test,
-                dataset_type_backend=config_obj.dataset_type_backend,
-                dataset_type_charactersitic='static')
+            data_x_train=tensor_x_train,
+            data_y_train=tensor_y_train,
+            data_x_test=tensor_x_test,
+            data_y_test=tensor_y_test,
+            dataset_type_backend=config_obj.dataset_type_backend,
+            dataset_type_charactersitic='static',
+            file_name_x=config_obj.data_setting.file_name_x,
+            file_name_y=config_obj.data_setting.file_name_y,
+            key_name_array='array',
+        )
     else:
         assert len(seq_path_xy_train) > 0, 'No data found.'
         assert len(seq_path_xy_test) > 0, 'No data found.'
         data_config_args = DataSetConfigArgs(
-                data_x_train=path_dir_data_train,
-                data_y_train=path_dir_data_train,
-                data_x_test=path_dir_data_test,
-                data_y_test=path_dir_data_test,
-                dataset_type_backend=config_obj.dataset_type_backend,
-                dataset_type_charactersitic='static')
+            data_x_train=path_dir_data_train,
+            data_y_train=path_dir_data_train,
+            data_x_test=path_dir_data_test,
+            data_y_test=path_dir_data_test,
+            dataset_type_backend=config_obj.dataset_type_backend,
+            dataset_type_charactersitic='static',
+            file_name_x=config_obj.data_setting.file_name_x,
+            file_name_y=config_obj.data_setting.file_name_y,
+            key_name_array='array',
+        )
     # end if
 
     path_work_dir = path_root_dir / 'work_dir'
@@ -311,15 +351,21 @@ def main(path_toml_config: Path):
     path_detection_output = path_dir_data / 'detection_output'
     path_detection_output.mkdir(parents=True, exist_ok=True)
     
-
     detection_approaches = config_obj.detection_approaches
 
+    # Distributed / Concurrent GPU configuration
+    is_dask = config_obj.computational_resource.distributed_mode == 'dask'
     distributed_config = DistributedConfigArgs(
         distributed_mode=config_obj.computational_resource.distributed_mode,
-        dask_scheduler_host=None,
+        dask_scheduler_host=config_obj.computational_resource.dask_scheduler_host if is_dask else None,
+        dask_scheduler_port=config_obj.computational_resource.dask_scheduler_port if is_dask else None,
+        dask_dashboard_address=config_obj.computational_resource.dask_dashboard_address if is_dask else None,
         dask_n_workers=config_obj.computational_resource.dask_n_workers,
-        dask_threads_per_worker=config_obj.computational_resource.dask_threads_per_worker
-        )
+        dask_threads_per_worker=config_obj.computational_resource.dask_threads_per_worker,
+        is_use_local_dask_cluster=is_dask,
+    )
+    # Attach k_slots_per_gpu so DeviceSlotManager in Interface initializes the multi-slot GPU cluster
+    distributed_config.k_slots_per_gpu = config_obj.computational_resource.k_slots_per_gpu
 
     parameter_search_parameter = RegularizationSearchParameters(
         n_regularization_parameter=config_obj.cv_selection.n_regularization_parameter,
@@ -328,25 +374,51 @@ def main(path_toml_config: Path):
     )
 
     for __detection_approach in detection_approaches:
+        approach_interpretable = config_obj.approach.approach_interpretable_mmd
+        approach_config = ApproachConfigArgs(
+            approach_data_representation=config_obj.approach.approach_data_representation,
+            approach_variable_detector=__detection_approach,
+            approach_interpretable_mmd=approach_interpretable,
+        )
+
+        mmd_cv_args = None
+        mmd_baseline_args = None
+        if __detection_approach == "interpretable_mmd":
+            if approach_interpretable == "cv_selection":
+                mmd_cv_args = CvSelectionConfigArgs(
+                    max_epoch=config_obj.cv_selection.MAX_EPOCH,
+                    parameter_search_parameter=parameter_search_parameter,
+                    n_subsampling=config_obj.cv_selection.n_subsampling,
+                )
+            elif approach_interpretable == "baseline_mmd":
+                mmd_baseline_args = BaselineMmdConfigArgs(
+                    max_epoch=config_obj.mmd_baseline.MAX_EPOCH,
+                )
+            # end if
+        # end if
+
+        detector_algorithm_args = DetectorAlgorithmConfigArgs(
+            mmd_cv_selection_args=mmd_cv_args,
+            mmd_baseline_args=mmd_baseline_args,
+            trainer_backend=config_obj.mmd_optimization.trainer_backend,
+            matrix_computation=config_obj.mmd_optimization.matrix_computation,
+            use_fused_kernel=config_obj.mmd_optimization.use_fused_kernel,
+            use_legacy_optimization=config_obj.mmd_optimization.use_legacy_optimization,
+        )
+
         # run the algorithm by interface.
         interface_args = InterfaceConfigArgs(
             resource_config_args=ResourceConfigArgs(
                 train_accelerator=config_obj.computational_resource.train_accelerator,
                 path_work_dir=path_work_dir,
-                distributed_config_detection=distributed_config),  #comment: 8 threads is best choice.
-            approach_config_args=ApproachConfigArgs(
-                approach_data_representation='sample_based',
-                approach_variable_detector=__detection_approach,
-                approach_interpretable_mmd='cv_selection'),
+                distributed_config_detection=distributed_config,
+            ),
+            approach_config_args=approach_config,
             data_config_args=data_config_args,
-            detector_algorithm_config_args=DetectorAlgorithmConfigArgs(
-                mmd_cv_selection_args=CvSelectionConfigArgs(
-                    max_epoch=config_obj.cv_selection.MAX_EPOCH,
-                    parameter_search_parameter=parameter_search_parameter,
-                    n_subsampling=config_obj.cv_selection.n_subsampling,
-                ))
+            detector_algorithm_config_args=detector_algorithm_args,
         )
     
+        logger.info(f"Running detection approach: {__detection_approach} (accelerator: {config_obj.computational_resource.train_accelerator}, distributed_mode: {config_obj.computational_resource.distributed_mode})")
         __interface = Interface(interface_args)
         __interface.fit()
         result_obj = __interface.get_result(output_mode='verbose')
@@ -354,17 +426,19 @@ def main(path_toml_config: Path):
         
         detection_obj_json: str = result_obj.as_json()
         
-        with open(path_detection_output / f'{__detection_approach}.json', 'w') as f:
+        out_file = path_detection_output / f'{__detection_approach}.json'
+        with open(out_file, 'w') as f:
             f.write(detection_obj_json)
         # end with
-        
+        logger.info(f"Saved detection result to: {out_file}")
+    # end for
+
 
 if __name__ == "__main__":
-    import sys
     from argparse import ArgumentParser
 
     opt = ArgumentParser()
-    opt.add_argument('--path_config', type=str, required=True)
+    opt.add_argument('--path_config', type=str, required=True, help="Path to config toml file")
     __args = opt.parse_args()
 
     logger.info("---- Begin of the script ----")

@@ -30,6 +30,10 @@ def variable_detection_hist_based_ver2(array_weights: np.ndarray,
     - `bins` is auto. 1/5 of the input dimension.
     - Workaround when there is no "0" value valley.
     """
+    # if np.isnan(array_weights).any() or np.all(array_weights == array_weights[0]):
+    #     return 0.0, []
+    # # end if
+
     if n_bins is None:
         if len(array_weights) < 100:
             n_bins = 100

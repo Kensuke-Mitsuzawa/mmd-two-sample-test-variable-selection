@@ -29,7 +29,7 @@ This example is only when you know an appropriate kernel function. In other word
 """
 
 
-def example_interpretable_mmd(max_epochs: int):
+def example_interpretable_mmd(max_epochs: int = 100):
     # hyper-parameters. Regularization parameter.
     reg_parameter_l1 = 0.1
     reg_parameter_l2 = 0.1
@@ -65,12 +65,46 @@ def example_interpretable_mmd(max_epochs: int):
 
     mmd_estimator = QuadraticMmdEstimator(kernel_obj=kernel_function)
 
-    pl_trainer_config = PytorchLightningDefaultArguments(max_epochs=max_epochs,
-                                                  callbacks=ConvergenceEarlyStop(),
-                                                  enable_checkpointing=False,
-                                                  enable_model_summary=False,
-                                                  enable_progress_bar=True,
-                                                  default_root_dir=Path("/tmp/",))
+    # =========================================================================
+    # Device Options
+    # -------------------------------------------------------------------------
+    # Available device modes:
+    # 1. GPU (Active default below):
+    #    - accelerator='gpu' (or 'cuda'), devices=1
+    #    - Fast training execution using GPU acceleration.
+    #
+    # 2. CPU:
+    #    - accelerator='cpu', devices='auto'
+    #    - Sequential model training on the host CPU.
+    # =========================================================================
+
+    # Active: GPU device mode (falls back to CPU if CUDA is not available)
+    accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+    devices = 1 if torch.cuda.is_available() else "auto"
+
+    pl_trainer_config = PytorchLightningDefaultArguments(
+        max_epochs=max_epochs,
+        accelerator=accelerator,
+        devices=devices,
+        callbacks=[ConvergenceEarlyStop()],
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        enable_progress_bar=True,
+        default_root_dir=Path("/tmp/"),
+    )
+
+    # --- Example: Run on CPU ---
+    # pl_trainer_config = PytorchLightningDefaultArguments(
+    #     max_epochs=max_epochs,
+    #     accelerator="cpu",
+    #     devices="auto",
+    #     callbacks=[ConvergenceEarlyStop()],
+    #     enable_checkpointing=False,
+    #     enable_model_summary=False,
+    #     enable_progress_bar=True,
+    #     default_root_dir=Path("/tmp/"),
+    # )
+
     pl_trainer = pytorch_lightning.Trainer(**pl_trainer_config.as_dict())
     
     training_parameter = InterpretableMmdTrainParameters(
@@ -96,7 +130,7 @@ def example_interpretable_mmd(max_epochs: int):
 
 
 def test_example():
-    example_interpretable_mmd(max_epochs=2000)
+    example_interpretable_mmd(max_epochs=100)
 
 
 if __name__ == "__main__":

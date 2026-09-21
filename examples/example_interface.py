@@ -86,11 +86,61 @@ def get_api_configurations(tensor_x_train: torch.Tensor,
             dataset_type_backend='ram',
             dataset_type_charactersitic='static')
 
-    # configuration about distributed-computing.
-    # you can choose dask when you want to use distributed computing.
+    # =========================================================================
+    # Device & Dispatcher Options
+    # -------------------------------------------------------------------------
+    # The dispatcher is resolved by create_task_dispatcher based on:
+    #   (train_accelerator, distributed_mode)
+    #
+    # Available options:
+    # 1. Dask CPU (Default):
+    #    - train_accelerator='cpu'
+    #    - distributed_mode='dask'
+    #    -> Dispatches tasks across CPU workers via DaskCpuTaskDispatcher.
+    #
+    # 2. Concurrent GPU:
+    #    - train_accelerator='gpu' (or 'cuda')
+    #    - distributed_mode='dask'
+    #    -> Multi-slot concurrent GPU tasks via ConcurrentGpuTaskDispatcher
+    #       (uses NVIDIA MPS daemon and worker GPU slot pinning).
+    #
+    # 3. Single GPU:
+    #    - train_accelerator='gpu' (or 'cuda')
+    #    - distributed_mode='single'
+    #    -> Sequential execution on a single GPU via SingleGpuTaskDispatcher.
+    #
+    # 4. Single CPU:
+    #    - train_accelerator='cpu'
+    #    - distributed_mode='single'
+    #    -> Sequential in-process execution on CPU via SingleCpuTaskDispatcher.
+    # =========================================================================
+
+    # Default: CPU with Dask distributed computing (DaskCpuTaskDispatcher)
     distributed_config = DistributedConfigArgs(
-        distributed_mode='single',
-        dask_scheduler_host=None)
+        distributed_mode='dask',
+        is_use_local_dask_cluster=True,
+        dask_n_workers=4,
+        dask_threads_per_worker=2,
+    )
+
+    # -------------------------------------------------------------------------
+    # Example: To use GPU in concurrent mode (ConcurrentGpuTaskDispatcher):
+    # 1. Set distributed_mode='dask' on a local cluster (DeviceSlotManager spawns
+    #    GPU-pinned worker processes and GpuEnvironmentManager enables NVIDIA MPS):
+    #
+    # distributed_config = DistributedConfigArgs(
+    #     distributed_mode='dask',
+    #     is_use_local_dask_cluster=True,
+    #     dask_n_workers=4,  # number of concurrent worker slots across GPUs
+    # )
+    #
+    # 2. Pass train_accelerator='gpu' (or 'cuda') to ResourceConfigArgs:
+    # resource_config_args = ResourceConfigArgs(
+    #     train_accelerator='gpu',
+    #     path_work_dir=path_work_dir,
+    #     distributed_config_detection=distributed_config,
+    # )
+    # -------------------------------------------------------------------------
 
     # parameters for regularisation search.
     parameter_search_parameter = RegularizationSearchParameters(
@@ -102,7 +152,7 @@ def get_api_configurations(tensor_x_train: torch.Tensor,
             resource_config_args=ResourceConfigArgs(
                 train_accelerator=train_accelerator,
                 path_work_dir=path_work_dir,
-                distributed_config_detection=distributed_config),  #comment: 8 threads is best choice.
+                distributed_config_detection=distributed_config),  # comment: 8 threads is best choice.
             approach_config_args=ApproachConfigArgs(
                 approach_data_representation='sample_based',
                 approach_variable_detector='interpretable_mmd',
@@ -130,15 +180,29 @@ def example():
     tensor_x_test, tensor_y_test = generate_sample_data_static_data_matrix(random_seed=24)
 
     # You have two ways to set the config.
-    # 1. loading your configurations from a toml file (this example).
-    # 2. setting parameters directly to `InterfaceConfigArgs`.
+    # 1. loading your configurations from a toml file.
+    # 2. setting parameters directly to `InterfaceConfigArgs` (this example).
+
+    # Default: CPU with Dask (DaskCpuTaskDispatcher)
     interface_configs = get_api_configurations(
         tensor_x_train, 
         tensor_y_train, 
         tensor_x_test, 
         tensor_y_test, 
         path_work_dir, 
-        train_accelerator='auto')
+        train_accelerator='cpu')
+
+    # -------------------------------------------------------------------------
+    # Example: Run with GPU and concurrent mode (ConcurrentGpuTaskDispatcher)
+    # -------------------------------------------------------------------------
+    # interface_configs = get_api_configurations(
+    #     tensor_x_train, 
+    #     tensor_y_train, 
+    #     tensor_x_test, 
+    #     tensor_y_test, 
+    #     path_work_dir, 
+    #     train_accelerator='gpu')  # or 'cuda'
+    # -------------------------------------------------------------------------
     
     # Create the interface
     interface_instance = Interface(config_args=interface_configs)

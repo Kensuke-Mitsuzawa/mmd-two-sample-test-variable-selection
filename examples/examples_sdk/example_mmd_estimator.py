@@ -46,11 +46,36 @@ def example_mmd_estimator():
     # defining a MMD-estimator
     mmd_estimator = QuadraticMmdEstimator(kernel_obj=kernel_function)
 
+    # =========================================================================
+    # Device Options
+    # -------------------------------------------------------------------------
+    # 1. GPU (Active default below):
+    #    - device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    #    - Computes kernel matrices and MMD on GPU for accelerated execution.
+    #
+    # 2. CPU:
+    #    - device = torch.device('cpu')
+    #    - Computes kernel matrices and MMD on host CPU.
+    # =========================================================================
+
+    # Active: GPU device (falls back to CPU if CUDA is not available)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using compute device: {device}")
+
+    # --- Example: Run on CPU ---
+    # device = torch.device("cpu")
+
+    # Move estimator and kernel parameters to device
+    mmd_estimator = mmd_estimator.to(device)
+
     # calculating MMD
     data_loader = torch.utils.data.DataLoader(dataset_target, batch_size=100, shuffle=True)
     for __pair_xy in data_loader:
-        __mmd_container = mmd_estimator.forward(__pair_xy[0], __pair_xy[1])
+        tensor_x = __pair_xy[0].to(device)
+        tensor_y = __pair_xy[1].to(device)
+        __mmd_container = mmd_estimator.forward(tensor_x, tensor_y)
         logger.info(f'MMD^2={__mmd_container.mmd}')
+    # end for
         
 
 def test_example():
