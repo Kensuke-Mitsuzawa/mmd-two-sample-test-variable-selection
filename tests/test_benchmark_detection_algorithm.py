@@ -48,11 +48,11 @@ logger = logging.getLogger()
 
 # How to run
 
-`python -m pytest tests/test_benchmark_detection_algorithm.py --collect-only`
+`python -m pytest tests/test_benchmark_detection_algorithm.py`
 
 # Way to check the result
 
-The script writes out the comparison result into `tmp/<file-name>.json`. The path to this json file is shown in the console after the script finishes.
+The script writes out the comparison result into `tmp/benchmark_result_*_seed_*.json`. The path to this json file is shown in the console after the script finishes.
 """
 
 

@@ -32,6 +32,9 @@ import dask
 import dask.config
 
 
+"""A test script to run the MMD-CV in the single-process mode and distributed-mode (dask).
+"""
+
 def sample_gaussian(x, sample: int) -> np.ndarray:
     return np.random.normal(loc=1000, scale=1, size=(sample,))
 

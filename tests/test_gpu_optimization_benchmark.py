@@ -19,6 +19,8 @@ from mmd_tst_variable_detector.detection_algorithm.early_stoppings import (
 from mmd_tst_variable_detector.utils import evaluate_variable_detection
 from tests import data_generator
 
+"""A benchmark script to compare the optimization speed and optimization accuracy."""
+
 
 def create_test_setup(sample_size: int = 400, dim_size: int = 10, seed: int = 42):
     t_xy, ground_truth = data_generator.test_data_xy_linear(
