@@ -41,11 +41,13 @@ class PathAggregationVariableDetector(BaseVariableDetector):
         pytorch_trainer_config: ty.Optional[PytorchLightningDefaultArguments] = None,
         base_training_parameter: ty.Optional[InterpretableMmdTrainParameters] = None,
         threshold: float = 0.01,
+        selection_strategy: ty.Literal["threshold", "hist_based", "normalized_threshold"] = "threshold",
         weight_transformation: ty.Literal["identity", "bounded"] = "identity",
         path_weights: ty.Optional[ty.Sequence[float]] = None,
         subsampling_splits: int = 1,
         subsampling_ratio: float = 0.8,
         random_seed: ty.Optional[int] = 42,
+        save_split_weights: bool = True,
         # Dispatcher & accelerator parameters
         train_accelerator: str = "cpu",
         distributed_mode: str = "single",
@@ -121,11 +123,13 @@ class PathAggregationVariableDetector(BaseVariableDetector):
         self.algorithm_parameters = PathAggregationAlgorithmParameter(
             regularization_grid=sorted(list(regularization_grid)),
             threshold=threshold,
+            selection_strategy=selection_strategy,
             weight_transformation=weight_transformation,
             path_weights=list(path_weights) if path_weights is not None else None,
             subsampling_splits=subsampling_splits,
             subsampling_ratio=subsampling_ratio,
             random_seed=random_seed,
+            save_split_weights=save_split_weights,
         )
         self.base_training_parameter = (
             base_training_parameter
@@ -225,13 +229,16 @@ class PathAggregationVariableDetector(BaseVariableDetector):
             "train_accelerator": self.train_accelerator,
             "distributed_mode": self.distributed_mode,
             "threshold": self.algorithm_parameters.threshold,
+            "selection_strategy": self.algorithm_parameters.selection_strategy,
             "weight_transformation": self.algorithm_parameters.weight_transformation,
+            "save_split_weights": self.algorithm_parameters.save_split_weights,
         }
 
         return PathAggregationDetectionResult(
             selected_variables=selected_variables,
             aggregated_scores=aggregated_path_scores.aggregated_scores,
             regularization_path_weights=aggregated_path_scores.regularization_path_weights,
+            split_path_weights=aggregated_path_scores.split_path_weights,
             regularization_grid=self.algorithm_parameters.regularization_grid,
             execution_metadata=metadata,
         )

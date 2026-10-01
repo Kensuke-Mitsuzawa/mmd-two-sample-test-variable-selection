@@ -14,6 +14,10 @@ class PathAggregationAlgorithmParameter(BaseModel):
         gt=0.0,
         description="Selection threshold tau > 0 for aggregated importance scores.",
     )
+    selection_strategy: ty.Literal["threshold", "hist_based", "normalized_threshold"] = Field(
+        default="threshold",
+        description="Variable selection strategy: 'threshold' (raw score > tau), 'hist_based' (histogram valley), or 'normalized_threshold' (normalized score > tau).",
+    )
     weight_transformation: ty.Literal["identity", "bounded"] = Field(
         default="identity",
         description="Transformation function rho(t): 'identity' (t) or 'bounded' (t / (1+t)).",
@@ -36,6 +40,10 @@ class PathAggregationAlgorithmParameter(BaseModel):
     random_seed: ty.Optional[int] = Field(
         default=42,
         description="Random seed for reproducible subsampling.",
+    )
+    save_split_weights: bool = Field(
+        default=True,
+        description="Whether to store individual ARD weights for each subsampling split (shape L x B x d).",
     )
 # end class
 
@@ -83,6 +91,10 @@ class PathAggregationDetectionResult(BaseModel):
     )
     regularization_path_weights: ty.List[ty.List[float]] = Field(
         description="Matrix of shape (L, d) containing optimized weights along the regularization path."
+    )
+    split_path_weights: ty.Optional[ty.List[ty.List[ty.List[float]]]] = Field(
+        default=None,
+        description="Nested list of shape (L, B, d) storing individual split ARD weights for each lambda and split.",
     )
     regularization_grid: ty.List[float] = Field(
         description="The regularization grid Lambda = {lambda_1, ..., lambda_L} evaluated."

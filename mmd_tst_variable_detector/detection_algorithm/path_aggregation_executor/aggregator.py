@@ -14,6 +14,10 @@ class AggregatedPathScores(BaseModel):
     regularization_path_weights: ty.List[ty.List[float]] = Field(
         description="Matrix of shape (L, d) storing average ARD weights along the regularization path."
     )
+    split_path_weights: ty.Optional[ty.List[ty.List[ty.List[float]]]] = Field(
+        default=None,
+        description="Nested list of shape (L, B, d) storing individual split ARD weights for each lambda.",
+    )
 # end class
 
 
@@ -136,14 +140,23 @@ class PathAggregator(object):
             tensor_scores += w_lambda * self.rho_fn(tensor_a)
         # end for
 
+        # Collect individual split weights if requested
+        matrix_split_weights: ty.Optional[ty.List[ty.List[ty.List[float]]]] = None
+        if getattr(self.parameters, "save_split_weights", True):
+            matrix_split_weights = [
+                dict_index_to_weights[l_idx] for l_idx in range(length_grid)
+            ]
+        # end if
+
         return AggregatedPathScores(
             aggregated_scores=tensor_scores.tolist(),
             regularization_path_weights=matrix_path_weights,
+            split_path_weights=matrix_split_weights,
         )
     # end def
 
     def select_variables(self, aggregated_scores: ty.List[float]) -> ty.List[int]:
-        """Identify selected variable indices exceeding threshold tau.
+        """Identify selected variable indices exceeding threshold tau or via histogram-based valley detection.
 
         Parameters
         ----------
@@ -155,10 +168,29 @@ class PathAggregator(object):
         List[int]
             0-indexed selected variable indices.
         """
-        threshold = self.parameters.threshold
-        selected_indices = [
-            idx for idx, score in enumerate(aggregated_scores) if score > threshold
-        ]
-        return selected_indices
+        strategy = getattr(self.parameters, "selection_strategy", "threshold")
+        if strategy == "hist_based":
+            from ...utils.variable_detection import detect_variables
+            tensor_scores = torch.tensor(aggregated_scores, dtype=torch.float32)
+            return detect_variables(
+                variable_weights=tensor_scores,
+                variable_detection_approach="hist_based",
+            )
+        elif strategy == "normalized_threshold":
+            from ...utils.variable_detection import detect_variables
+            tensor_scores = torch.tensor(aggregated_scores, dtype=torch.float32)
+            return detect_variables(
+                variable_weights=tensor_scores,
+                variable_detection_approach="threshold",
+                threshold_weights=self.parameters.threshold,
+                is_normalize_ard_weights=True,
+            )
+        else:
+            threshold = self.parameters.threshold
+            selected_indices = [
+                idx for idx, score in enumerate(aggregated_scores) if score > threshold
+            ]
+            return selected_indices
+        # end if
     # end def
 # end class
