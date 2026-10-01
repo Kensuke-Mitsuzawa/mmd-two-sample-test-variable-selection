@@ -19,14 +19,13 @@ class BaseTaskDispatcher(ABC):
 
     def __init__(
         self,
-
         batch_size: int = 1,
         resume_checkpoint_saver: ty.Optional[ty.Any] = None,
         post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
         cv_experiment_name: ty.Optional[str] = None,
         worker_fn: ty.Optional[ty.Callable] = None,
     ) -> None:
-        self.batch_size = max(1, batch_size)
+        self.batch_size = batch_size
         self.resume_checkpoint_saver = resume_checkpoint_saver
         self.post_process_handler = post_process_handler
         self.cv_experiment_name = cv_experiment_name
@@ -57,9 +56,12 @@ class BaseTaskDispatcher(ABC):
             return []
         # end if
 
+        effective_batch_size = (
+            self.batch_size if self.batch_size > 0 else len(seq_task_arguments)
+        )
         seq_batch = [
-            seq_task_arguments[i * self.batch_size : (i + 1) * self.batch_size]
-            for i in range((len(seq_task_arguments) + self.batch_size - 1) // self.batch_size)
+            seq_task_arguments[i * effective_batch_size : (i + 1) * effective_batch_size]
+            for i in range((len(seq_task_arguments) + effective_batch_size - 1) // effective_batch_size)
         ]
 
         seq_results: ty.List[ty.Any] = []

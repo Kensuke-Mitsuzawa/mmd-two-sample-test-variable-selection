@@ -431,6 +431,9 @@ def run_benchmark_algorithm_one(
         candidate_regularization_parameters=candidate_params,
         is_p_value_filter=algo_parameter.is_p_value_filter,
         n_permutation_test=algo_parameter.n_permutation_test,
+        distributed_mode="dask",
+        k_slots_per_gpu=None,  # Automatically determined by VramConsumptionEstimator
+        distributed_batch_size=-1,
     )
 
     result: AlgorithmOneResult = detector.run_detection(
@@ -494,7 +497,8 @@ def run_benchmark_mmd_cv(
     cv_train_params = CrossValidationTrainParameters(
         algorithm_parameter=cv_alg_param,
         base_training_parameter=base_train_param,
-        distributed_parameter=DistributedComputingParameter(job_batch_size=1),
+        distributed_parameter=DistributedComputingParameter(job_batch_size=-1),
+        computation_backend="dask",
     )
 
     detector = CrossValidationInterpretableVariableDetector(
@@ -562,7 +566,9 @@ def run_benchmark_path_aggregation(
         subsampling_ratio=path_agg_parameter.subsampling_ratio,
         save_split_weights=path_agg_parameter.save_split_weights,
         train_accelerator=shared_parameter.accelerator,
-        distributed_mode="single",
+        distributed_mode="dask",
+        k_slots_per_gpu=None,  # Automatically determined by VramConsumptionEstimator
+        distributed_batch_size=-1,
     )
 
     result: PathAggregationDetectionResult = detector.run_detection(training_dataset=dataset)

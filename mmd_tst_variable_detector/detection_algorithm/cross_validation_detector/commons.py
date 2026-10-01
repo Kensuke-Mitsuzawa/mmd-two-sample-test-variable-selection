@@ -131,8 +131,7 @@ class CrossValidationTrainParameters(object):
     algorithm_parameter: CrossValidationAlgorithmParameter
     base_training_parameter: InterpretableMmdTrainParameters
     distributed_parameter: DistributedComputingParameter
-    # computation_backend = None  # deprecated
-    # dist_parameter = None  # deprecated
+    computation_backend: ty.Optional[str] = None
 
 
 # -------------------------------------------------------------

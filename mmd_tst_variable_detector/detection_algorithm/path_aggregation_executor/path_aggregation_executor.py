@@ -53,7 +53,9 @@ class PathAggregationVariableDetector(BaseVariableDetector):
         distributed_mode: str = "single",
         dask_client: ty.Optional[Client] = None,
         dask_scheduler_address: ty.Optional[str] = None,
-        distributed_batch_size: int = 1,
+        distributed_batch_size: int = -1,
+        k_slots_per_gpu: ty.Optional[int] = None,
+        vram_safety_margin: float = 0.85,
         device_id: int = 0,
         resume_checkpoint_saver: ty.Optional[ty.Any] = None,
         post_process_handler: ty.Optional[PostProcessLoggerHandler] = None,
@@ -75,6 +77,8 @@ class PathAggregationVariableDetector(BaseVariableDetector):
             Base training parameters for the MMD detector.
         threshold : float
             Cutoff threshold tau > 0 for aggregated importance scores.
+        selection_strategy : str
+            Strategy for selecting variables ('hist_based', 'normalized_threshold', 'threshold').
         weight_transformation : Literal["identity", "bounded"]
             Transformation rho applied to weights (default: "identity").
         path_weights : Optional[Sequence[float]]
@@ -85,6 +89,8 @@ class PathAggregationVariableDetector(BaseVariableDetector):
             Fraction of data to draw per subsample split (default: 0.8).
         random_seed : Optional[int]
             Random seed for subsampling reproducibility.
+        save_split_weights : bool
+            Whether to save raw weights across individual splits (default: True).
         train_accelerator : str
             Target compute accelerator: 'cpu', 'gpu', 'cuda', or 'auto'.
         distributed_mode : str
@@ -94,7 +100,12 @@ class PathAggregationVariableDetector(BaseVariableDetector):
         dask_scheduler_address : Optional[str]
             Address of Dask scheduler if client is not provided directly.
         distributed_batch_size : int
-            Batch size for dispatching tasks.
+            Batch size for dispatching tasks. Default is -1 (dispatch all tasks in one batch).
+        k_slots_per_gpu : Optional[int]
+            Number of concurrent worker slots per GPU. If None (default), automatically
+            determined by VramConsumptionEstimator.
+        vram_safety_margin : float
+            Safety margin ratio for VRAM calculation when auto-determining K (default: 0.85).
         device_id : int
             Device index for single-GPU execution.
         resume_checkpoint_saver : Optional[Any]
@@ -141,7 +152,9 @@ class PathAggregationVariableDetector(BaseVariableDetector):
         self.train_accelerator = train_accelerator
         self.distributed_mode = distributed_mode
         self.dask_scheduler_address = dask_scheduler_address
-        self.distributed_batch_size = max(1, distributed_batch_size)
+        self.distributed_batch_size = distributed_batch_size
+        self.k_slots_per_gpu = k_slots_per_gpu
+        self.vram_safety_margin = vram_safety_margin
         self.device_id = device_id
         self.resume_checkpoint_saver = resume_checkpoint_saver
         self.cv_experiment_name = cv_experiment_name
@@ -163,6 +176,8 @@ class PathAggregationVariableDetector(BaseVariableDetector):
             cv_experiment_name=self.cv_experiment_name,
             device_id=self.device_id,
             worker_fn=self.worker_fn,
+            k_slots_per_gpu=self.k_slots_per_gpu,
+            vram_safety_margin=self.vram_safety_margin,
             **kwargs,
         )
     # end def
