@@ -18,6 +18,13 @@ from mmd_tst_variable_detector.detection_algorithm.pure_pytorch_trainer import P
 from mmd_tst_variable_detector.utils import evaluate_variable_detection
 
 
+"""A benchmark script to compare the algorithm speed. The comparsions are:
+- a single process on CPU.
+- a single process on GPU.
+- concurrent processes on GPU, optimized for GPU (a custom trainer & a custom kernel function optimized for CUDA device).
+"""
+
+
 DISTRIBUTION_P = {"type": "gaussian", "mu": 0.0, "sigma": 1.0}
 
 DISTRIBUTIONS_Q = {

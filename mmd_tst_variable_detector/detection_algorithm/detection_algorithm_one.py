@@ -548,7 +548,10 @@ def __run_algorithm_one_min_max_param_range(
     # permutation_test_runner_base: ty.Optional[PermutationTest] = None,
     variable_detection_method: str = "hist_based",
     test_distance_functions: ty.Tuple[str, ...] = ('sliced_wasserstein',),
-    n_permutation_test: int = 500
+    n_permutation_test: int = 500,
+    distributed_mode: ty.Optional[str] = None,
+    k_slots_per_gpu: ty.Optional[int] = None,
+    vram_safety_margin: float = 0.85,
     ) -> ty.List[_AlgorithmOneRangeFunctionReturn]:
     """Running algorithm one with min. and max. of regularization parameters.
     """
@@ -593,7 +596,9 @@ def __run_algorithm_one_min_max_param_range(
         test_distance_functions=test_distance_functions,
         n_permutation_test=n_permutation_test)
 
-    distributed_mode = "dask" if dask_client is not None else "single"
+    if distributed_mode is None:
+        distributed_mode = "dask" if dask_client is not None else "single"
+    # end if
     train_accelerator = pytorch_trainer_config.accelerator if pytorch_trainer_config.accelerator else "cpu"
     batch_size = distributed_batch_size if distributed_batch_size > 0 else max(1, len(seq_function_request_payload))
 
@@ -603,6 +608,8 @@ def __run_algorithm_one_min_max_param_range(
         dask_client=dask_client,
         batch_size=batch_size,
         worker_fn=__run_optimization_estimator,
+        k_slots_per_gpu=k_slots_per_gpu,
+        vram_safety_margin=vram_safety_margin,
     )
     return_obj = task_dispatcher.dispatch(seq_function_request_payload)
     assert isinstance(return_obj, list)
@@ -759,7 +766,10 @@ class AlgorithmOneVariableDetector(BaseVariableDetector):
         candidate_regularization_parameters: PossibleTypeRegularizationParameter = 'search_objective_based',
         regularization_search_parameter: RegularizationSearchParameters = RegularizationSearchParameters(),
         dask_client: ty.Optional[Client] = None,
+        distributed_mode: ty.Optional[str] = None,
         distributed_batch_size: int = -1,
+        k_slots_per_gpu: ty.Optional[int] = None,
+        vram_safety_margin: float = 0.85,
         variable_detection_method: str = "hist_based",
         is_p_value_filter: bool = False,
         dataset_test: ty.Optional[BaseDataset] = None,
@@ -779,7 +789,10 @@ class AlgorithmOneVariableDetector(BaseVariableDetector):
         self.base_training_parameter = base_training_parameter
         self.candidate_regularization_parameters = candidate_regularization_parameters
         self.regularization_search_parameter = regularization_search_parameter
+        self.distributed_mode = distributed_mode
         self.distributed_batch_size = distributed_batch_size
+        self.k_slots_per_gpu = k_slots_per_gpu
+        self.vram_safety_margin = vram_safety_margin
         self.variable_detection_method = variable_detection_method
         self.is_p_value_filter = is_p_value_filter
         self.dataset_test = dataset_test
@@ -847,6 +860,9 @@ class AlgorithmOneVariableDetector(BaseVariableDetector):
                 variable_detection_method=self.variable_detection_method,
                 test_distance_functions=self.test_distance_functions,
                 n_permutation_test=self.n_permutation_test,
+                distributed_mode=self.distributed_mode,
+                k_slots_per_gpu=self.k_slots_per_gpu,
+                vram_safety_margin=self.vram_safety_margin,
             )
         elif reg_mode == 'search_objective_based':
             seq_optimized_mmd = _run_algorithm_one_search_objective_based(
@@ -892,7 +908,10 @@ def detection_algorithm_one(
     candidate_regularization_parameters: PossibleTypeRegularizationParameter = 'search_objective_based',
     regularization_search_parameter: RegularizationSearchParameters = RegularizationSearchParameters(),
     dask_client: ty.Optional[Client] = None,
+    distributed_mode: ty.Optional[str] = None,
     distributed_batch_size: int = -1,
+    k_slots_per_gpu: ty.Optional[int] = None,
+    vram_safety_margin: float = 0.85,
     variable_detection_method: str = "hist_based",
     is_p_value_filter: bool = False,
     # permutation_test_runner_base: ty.Optional[PermutationTest] = None,
@@ -910,7 +929,10 @@ def detection_algorithm_one(
         candidate_regularization_parameters=candidate_regularization_parameters,
         regularization_search_parameter=regularization_search_parameter,
         dask_client=dask_client,
+        distributed_mode=distributed_mode,
         distributed_batch_size=distributed_batch_size,
+        k_slots_per_gpu=k_slots_per_gpu,
+        vram_safety_margin=vram_safety_margin,
         variable_detection_method=variable_detection_method,
         is_p_value_filter=is_p_value_filter,
         dataset_test=dataset_test,
