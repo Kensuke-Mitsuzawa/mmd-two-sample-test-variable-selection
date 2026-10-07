@@ -121,11 +121,12 @@ class CvSelectionConfigArgs:
 
 
 @dataclass
-class AlgorithmOneConfigArgs:
+class RegSelectionConfigArgs:
     max_epoch: int = 9999
     batch_size: int = -1
     
     mmd_estimator_config: MmdEstimatorConfig = field(default_factory=lambda: MmdEstimatorConfig())
+
         
     # lambda search parameter
     approach_regularization_parameter: str = 'search_objective_based'
@@ -167,6 +168,9 @@ class AlgorithmOneConfigArgs:
                 return True
         return False
 
+
+# Legacy alias for backward compatibility
+AlgorithmOneConfigArgs = RegSelectionConfigArgs
 
 
 @dataclass

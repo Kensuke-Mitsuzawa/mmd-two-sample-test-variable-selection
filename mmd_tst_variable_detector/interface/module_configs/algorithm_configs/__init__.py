@@ -1,4 +1,6 @@
 from .algorithm_config import (
     CvSelectionConfigArgs, 
-    AlgorithmOneConfigArgs
+    RegSelectionConfigArgs,
+    AlgorithmOneConfigArgs,
 )
+

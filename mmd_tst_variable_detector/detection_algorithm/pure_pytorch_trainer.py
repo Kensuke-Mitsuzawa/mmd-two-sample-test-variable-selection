@@ -49,7 +49,13 @@ class PurePytorchTrainer:
         self.max_epochs = max_epochs
         self.accelerator = accelerator.lower()
         self.devices = devices
-        self.callbacks = callbacks or []
+        if callbacks is None:
+            self.callbacks = []
+        elif isinstance(callbacks, (list, tuple)):
+            self.callbacks = list(callbacks)
+        else:
+            self.callbacks = [callbacks]
+        # end if
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.use_fused_kernel = use_fused_kernel
         self.enable_progress_bar = enable_progress_bar

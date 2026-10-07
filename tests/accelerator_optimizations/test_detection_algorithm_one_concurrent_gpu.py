@@ -6,7 +6,10 @@ import torch
 
 from mmd_tst_variable_detector.accelerator_optimizations import DeviceSlotManager
 from mmd_tst_variable_detector.datasets import SimpleDataset
-from mmd_tst_variable_detector.detection_algorithm.detection_algorithm_one import (
+from mmd_tst_variable_detector.detection_algorithm.reg_selection import (
+    detection_reg_selection,
+    RegSelectionResult,
+    RegSelectionIndividualResult,
     detection_algorithm_one,
     AlgorithmOneResult,
     AlgorithmOneIndividualResult,

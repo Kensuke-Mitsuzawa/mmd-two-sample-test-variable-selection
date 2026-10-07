@@ -100,6 +100,13 @@
 [test_algorithm_one_search_objective_based]
     max_epochs = 50
 
+[test_reg_selection_min_max_param_range]
+    max_epochs = 50
+
+[test_reg_selection_search_objective_based]
+    max_epochs = 50
+
+
 [test_sample_selection_based_detector]
     max_epochs = 50
     early_stopping = true

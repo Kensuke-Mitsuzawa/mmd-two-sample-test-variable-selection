@@ -24,6 +24,7 @@ from ....detection_algorithm.pytorch_lightning_trainer import PytorchLightningDe
 from ....assessment_helper import default_settings
 
 from .. import (
+    RegSelectionConfigArgs,
     AlgorithmOneConfigArgs,
     CvSelectionConfigArgs,
     ResourceConfigArgs,

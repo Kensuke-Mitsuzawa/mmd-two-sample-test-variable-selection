@@ -194,7 +194,7 @@ def __get_mmd_estimator(interpretable_mmd_result,
         mmd_estimator_parameters = interpretable_mmd_result.mmd_estimator
         mmd_estimator_arguments = interpretable_mmd_result.mmd_estimator_hyperparameters
         is_mmd_hard_possible = False
-    elif interpretable_mmd_result.__class__.__name__ == "AlgorithmOneResult":
+    elif interpretable_mmd_result.__class__.__name__ in ("RegSelectionResult", "AlgorithmOneResult"):
         # output from model_selection
         # I save only the best model. Do I need all model results...? I do not think so....
         assert interpretable_mmd_result.selected_model is not None

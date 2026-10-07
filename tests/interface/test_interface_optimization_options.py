@@ -17,6 +17,7 @@ from mmd_tst_variable_detector.interface.module_configs import (
     DataSetConfigArgs,
     DistributedConfigArgs,
     CvSelectionConfigArgs,
+    RegSelectionConfigArgs,
     AlgorithmOneConfigArgs,
     BaselineMmdConfigArgs,
 )
@@ -130,7 +131,7 @@ def test_interface_algorithm_one_with_pure_pytorch_and_fused():
             approach_config_args=ApproachConfigArgs(
                 approach_data_representation="sample_based",
                 approach_variable_detector="interpretable_mmd",
-                approach_interpretable_mmd="algorithm_one",
+                approach_interpretable_mmd="reg_selection",
             ),
             data_config_args=DataSetConfigArgs(
                 data_x_train=data_x,
@@ -143,7 +144,7 @@ def test_interface_algorithm_one_with_pure_pytorch_and_fused():
             detector_algorithm_config_args=DetectorAlgorithmConfigArgs(
                 trainer_backend="pure_pytorch",
                 matrix_computation="auto",
-                mmd_algorithm_one_args=AlgorithmOneConfigArgs(
+                mmd_reg_selection_args=RegSelectionConfigArgs(
                     max_epoch=20,
                     n_permutation_test=10,
                     parameter_search_parameter=RegularizationSearchParameters(

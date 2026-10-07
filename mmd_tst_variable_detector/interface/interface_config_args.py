@@ -6,6 +6,7 @@ from .module_configs.resource_config import ResourceConfigArgs
 from .module_configs.approach_config import ApproachConfigArgs
 from .module_configs.dataset_config import DataSetConfigArgs
 from .module_configs.algorithm_configs.algorithm_config import (
+    RegSelectionConfigArgs,
     AlgorithmOneConfigArgs,
     CvSelectionConfigArgs,
     BaselineMmdConfigArgs,
@@ -32,7 +33,8 @@ from ..logger_unit import handler
 
 from ..baselines.regression_based_variable_selection.tst_based_regression_tuner import TstBasedRegressionTunerResult
 from ..detection_algorithm.cross_validation_detector.cross_validation_detector import CrossValidationTrainedParameter
-from ..detection_algorithm.detection_algorithm_one import AlgorithmOneResult
+from ..detection_algorithm.reg_selection import RegSelectionResult, AlgorithmOneResult
+
 
 logger = logging.getLogger(f'{__package__}.{__name__}')
 logger.addHandler(handler)
@@ -116,6 +118,7 @@ class MmdOptimizationOption(BaseModel):
 @dataclass
 class DetectorAlgorithmConfigArgs:
     mmd_cv_selection_args: ty.Optional[ty.Union[str, ty.Dict, CvSelectionConfigArgs]] = None
+    mmd_reg_selection_args: ty.Optional[ty.Union[str, ty.Dict, RegSelectionConfigArgs]] = None
     mmd_algorithm_one_args: ty.Optional[ty.Union[str, ty.Dict, AlgorithmOneConfigArgs]] = None
     mmd_baseline_args: ty.Optional[ty.Union[str, ty.Dict, BaselineMmdConfigArgs]] = None
     linear_variable_selection_args: ty.Optional[ty.Union[str, ty.Dict, LinearVariableSelectionConfigArgs]] = None
@@ -140,10 +143,20 @@ class DetectorAlgorithmConfigArgs:
         elif isinstance(self.mmd_cv_selection_args, dict):
             self.mmd_cv_selection_args = CvSelectionConfigArgs(**self.mmd_cv_selection_args)
         # end if
+        # Sync mmd_reg_selection_args and legacy mmd_algorithm_one_args
+        if self.mmd_reg_selection_args == '':
+            self.mmd_reg_selection_args = None
         if self.mmd_algorithm_one_args == '':
             self.mmd_algorithm_one_args = None
-        elif isinstance(self.mmd_algorithm_one_args, dict):
-            self.mmd_algorithm_one_args = AlgorithmOneConfigArgs(**self.mmd_algorithm_one_args)
+
+        if self.mmd_reg_selection_args is not None:
+            if isinstance(self.mmd_reg_selection_args, dict):
+                self.mmd_reg_selection_args = RegSelectionConfigArgs(**self.mmd_reg_selection_args)
+            self.mmd_algorithm_one_args = self.mmd_reg_selection_args
+        elif self.mmd_algorithm_one_args is not None:
+            if isinstance(self.mmd_algorithm_one_args, dict):
+                self.mmd_algorithm_one_args = RegSelectionConfigArgs(**self.mmd_algorithm_one_args)
+            self.mmd_reg_selection_args = self.mmd_algorithm_one_args
         # end if
         if self.linear_variable_selection_args == '':
             self.linear_variable_selection_args = None

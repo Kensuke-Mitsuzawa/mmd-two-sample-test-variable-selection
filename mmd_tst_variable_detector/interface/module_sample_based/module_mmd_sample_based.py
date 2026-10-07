@@ -26,6 +26,7 @@ from ...detection_algorithm.cross_validation_detector import (
 from ..module_configs import ApproachConfigArgs
 from ..module_configs.algorithm_configs.algorithm_config import (
     CvSelectionConfigArgs,
+    RegSelectionConfigArgs,
     AlgorithmOneConfigArgs,
     BaselineMmdConfigArgs
 )
@@ -33,8 +34,11 @@ from ..interface_config_args import (
     DetectorAlgorithmConfigArgs,
     InterfaceConfigArgs
 )
-# Algorithm one
+# Reg selection (formerly Algorithm one)
 from ...detection_algorithm import (
+    detection_reg_selection,
+    RegSelectionResult,
+    RegSelectionVariableDetector,
     detection_algorithm_one, 
     AlgorithmOneResult,
     AlgorithmOneVariableDetector,
@@ -58,18 +62,21 @@ logger.addHandler(handler)
 
 def get_mmd_config_args(approach_config_args: ApproachConfigArgs,
                         detector_algorithm_config_args: DetectorAlgorithmConfigArgs
-                        ) -> ty.Union[CvSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs]:
+                        ) -> ty.Union[CvSelectionConfigArgs, RegSelectionConfigArgs, AlgorithmOneConfigArgs, BaselineMmdConfigArgs]:
 
     if approach_config_args.approach_interpretable_mmd == 'cv_selection':
         mmd_config_args = detector_algorithm_config_args.mmd_cv_selection_args
 
         assert mmd_config_args is not None, 'mmd_cv_selection_args is not given.'
         assert isinstance(mmd_config_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
-    elif approach_config_args.approach_interpretable_mmd == 'algorithm_one':
-        mmd_config_args = detector_algorithm_config_args.mmd_algorithm_one_args
+    elif approach_config_args.approach_interpretable_mmd in ('reg_selection', 'algorithm_one'):
+        mmd_config_args = (
+            detector_algorithm_config_args.mmd_reg_selection_args
+            or detector_algorithm_config_args.mmd_algorithm_one_args
+        )
 
-        assert mmd_config_args is not None, 'mmd_algorithm_one_args is not given.'
-        assert isinstance(mmd_config_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
+        assert mmd_config_args is not None, 'mmd_reg_selection_args is not given.'
+        assert isinstance(mmd_config_args, (RegSelectionConfigArgs, AlgorithmOneConfigArgs)), 'mmd_reg_selection_args is not given.'
     elif approach_config_args.approach_interpretable_mmd == 'baseline_mmd':
         mmd_config_args = detector_algorithm_config_args.mmd_baseline_args
 
@@ -214,9 +221,8 @@ def __main_run(dataset_train: BaseDataset,
             seed_root_random=seed_root_random,
             dask_client=dask_client)
         res = detector.run_detection(dataset_train)
-    elif isinstance(mmd_config_args, AlgorithmOneConfigArgs):
-        # comment: I take `cv_config` for common.
-        logger.debug('Running Algorithm One...')
+    elif isinstance(mmd_config_args, (RegSelectionConfigArgs, AlgorithmOneConfigArgs)):
+        logger.debug('Running Regularization Selection...')
         
         # spliting dataset into train/dev
         data_split_obj = dataset_train.split_train_and_test(
@@ -226,7 +232,7 @@ def __main_run(dataset_train: BaseDataset,
         __data_dev = data_split_obj.test_dataset
         
         __regularization_search_parameter = mmd_config_args.parameter_search_parameter
-        detector = AlgorithmOneVariableDetector(
+        detector = RegSelectionVariableDetector(
             estimator=mmd_estimator,
             base_training_parameter=cv_train_param.base_training_parameter,
             pytorch_trainer_config=pl_param,
@@ -260,13 +266,21 @@ def main(config_args: InterfaceConfigArgs,
          dataset_train: BaseDataset,
          dask_client: ty.Optional[Client] = None, 
          dataset_test: ty.Optional[BaseDataset] = None,) -> data_objects.BasicVariableSelectionResult:
+    has_reg_args = (
+        (config_args.detector_algorithm_config_args.mmd_reg_selection_args is not None) or
+        (config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None)
+    )
     assert (config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None) or \
-        (config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None) or \
-        (config_args.detector_algorithm_config_args.mmd_baseline_args is not None), 'Either of "mmd_cv_selection_args" or "mmd_algorithm_one_args" must be given.'
+        has_reg_args or \
+        (config_args.detector_algorithm_config_args.mmd_baseline_args is not None), 'Either of "mmd_cv_selection_args" or "mmd_reg_selection_args" must be given.'
     if config_args.detector_algorithm_config_args.mmd_cv_selection_args is not None:
         assert isinstance(config_args.detector_algorithm_config_args.mmd_cv_selection_args, CvSelectionConfigArgs), 'mmd_cv_selection_args is not given.'
-    if config_args.detector_algorithm_config_args.mmd_algorithm_one_args is not None and config_args.detector_algorithm_config_args.mmd_algorithm_one_args != '':
-        assert isinstance(config_args.detector_algorithm_config_args.mmd_algorithm_one_args, AlgorithmOneConfigArgs), 'mmd_algorithm_one_args is not given.'
+    reg_args = (
+        config_args.detector_algorithm_config_args.mmd_reg_selection_args or
+        config_args.detector_algorithm_config_args.mmd_algorithm_one_args
+    )
+    if reg_args is not None and reg_args != '':
+        assert isinstance(reg_args, (RegSelectionConfigArgs, AlgorithmOneConfigArgs)), 'mmd_reg_selection_args is not given.'
     # end if
     
     assert config_args.resource_config_args.path_work_dir is not None, 'path_work_dir is not given.'
@@ -303,7 +317,7 @@ def main(config_args: InterfaceConfigArgs,
         assert isinstance(res.array_s_hat, np.ndarray)
         weights = res.array_s_hat
         variables = res.stable_s_hat
-    elif isinstance(res, AlgorithmOneResult):
+    elif isinstance(res, (RegSelectionResult, AlgorithmOneResult)):
         assert res.selected_model is not None
         assert res.selected_model.interpretable_mmd_train_result is not None
         tensor_weights = res.selected_model.interpretable_mmd_train_result.ard_weights_kernel_k

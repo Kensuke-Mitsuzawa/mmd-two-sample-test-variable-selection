@@ -7,6 +7,8 @@ from mmd_tst_variable_detector import (
     DataSetConfigArgs,
     DetectorAlgorithmConfigArgs,
     CvSelectionConfigArgs,
+    RegSelectionConfigArgs,
+    AlgorithmOneConfigArgs,
     BasicVariableSelectionResult,
     OutputObject,
     DistributedConfigArgs,
@@ -70,7 +72,8 @@ def get_api_configurations(tensor_x_train: torch.Tensor,
                            tensor_x_test: torch.Tensor, 
                            tensor_y_test: torch.Tensor,
                            path_work_dir: Path,
-                           train_accelerator: str = 'cpu'
+                           train_accelerator: str = 'cpu',
+                           approach_interpretable_mmd: str = 'reg_selection'
                            ) -> InterfaceConfigArgs:
     """This function sets configuration objects for the interface.
     You can define the configuration objects in a toml file.
@@ -148,6 +151,26 @@ def get_api_configurations(tensor_x_train: torch.Tensor,
         n_search_iteration=5,
         max_concurrent_job=2)
 
+    if approach_interpretable_mmd in ('reg_selection', 'algorithm_one'):
+        detector_algorithm_config = DetectorAlgorithmConfigArgs(
+            mmd_reg_selection_args=RegSelectionConfigArgs(
+                max_epoch=9999,
+                parameter_search_parameter=parameter_search_parameter,
+                approach_regularization_parameter='search_objective_based',
+            )
+        )
+    elif approach_interpretable_mmd == 'cv_selection':
+        detector_algorithm_config = DetectorAlgorithmConfigArgs(
+            mmd_cv_selection_args=CvSelectionConfigArgs(
+                max_epoch=9999,
+                parameter_search_parameter=parameter_search_parameter,
+                n_subsampling=3,
+            )
+        )
+    else:
+        raise ValueError(f"Unsupported approach_interpretable_mmd: {approach_interpretable_mmd}")
+    # end if
+
     interface_args = InterfaceConfigArgs(
             resource_config_args=ResourceConfigArgs(
                 train_accelerator=train_accelerator,
@@ -156,14 +179,9 @@ def get_api_configurations(tensor_x_train: torch.Tensor,
             approach_config_args=ApproachConfigArgs(
                 approach_data_representation='sample_based',
                 approach_variable_detector='interpretable_mmd',
-                approach_interpretable_mmd='cv_selection'),
+                approach_interpretable_mmd=approach_interpretable_mmd),
             data_config_args=data_config_args,
-            detector_algorithm_config_args=DetectorAlgorithmConfigArgs(
-                mmd_cv_selection_args=CvSelectionConfigArgs(
-                    max_epoch=9999,
-                    parameter_search_parameter=parameter_search_parameter,
-                    n_subsampling=3,
-                ))
+            detector_algorithm_config_args=detector_algorithm_config
         )
 
     return interface_args

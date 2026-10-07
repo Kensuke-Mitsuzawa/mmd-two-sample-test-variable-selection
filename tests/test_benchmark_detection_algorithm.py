@@ -20,8 +20,10 @@ from mmd_tst_variable_detector import (
 )
 from mmd_tst_variable_detector.detection_algorithm.early_stoppings import ConvergenceEarlyStop
 
-# 1. Algorithm One
-from mmd_tst_variable_detector.detection_algorithm.detection_algorithm_one import (
+# 1. Reg Selection (formerly Algorithm One)
+from mmd_tst_variable_detector.detection_algorithm.reg_selection import (
+    RegSelectionVariableDetector,
+    RegSelectionResult,
     AlgorithmOneVariableDetector,
     AlgorithmOneResult,
 )
@@ -36,8 +38,10 @@ from mmd_tst_variable_detector.detection_algorithm.cross_validation_detector imp
 )
 from mmd_tst_variable_detector.exceptions import SameDataException
 
-# 3. Path Aggregation
-from mmd_tst_variable_detector.detection_algorithm.path_aggregation_executor import (
+# 3. Reg Aggregation (formerly Path Aggregation)
+from mmd_tst_variable_detector.detection_algorithm.reg_aggregation_executor import (
+    RegAggregationVariableDetector,
+    RegAggregationDetectionResult,
     PathAggregationVariableDetector,
     PathAggregationDetectionResult,
 )

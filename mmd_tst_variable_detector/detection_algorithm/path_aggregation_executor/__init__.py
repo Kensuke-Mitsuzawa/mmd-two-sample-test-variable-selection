@@ -1,20 +1,28 @@
-from .commons import (
+"""Legacy compatibility shim for path_aggregation_executor.
+
+Redirects all imports to mmd_tst_variable_detector.detection_algorithm.reg_aggregation_executor.
+"""
+from ..reg_aggregation_executor import (
+    RegAggregationAlgorithmParameter,
+    RegAggregationTaskRequest,
+    RegAggregationTaskResult,
+    RegAggregationDetectionResult,
     PathAggregationAlgorithmParameter,
     PathAggregationTaskRequest,
     PathAggregationTaskResult,
     PathAggregationDetectionResult,
-)
-from .worker import (
+    execute_optimization_task_reg_aggregation,
+    worker_reg_aggregation_optimization_routine,
     execute_optimization_task_path_aggregation,
     worker_path_aggregation_optimization_routine,
-)
-from .aggregator import (
-    PathAggregator,
-    AggregatedPathScores,
+    RegAggregator,
+    AggregatedRegScores,
     transform_score_identity,
     transform_score_bounded,
-)
-from .path_aggregation_executor import (
+    PathAggregator,
+    AggregatedPathScores,
+    RegAggregationVariableDetector,
+    RegAggregationExecutor,
     PathAggregationVariableDetector,
     PathAggregationExecutor,
 )
@@ -32,4 +40,14 @@ __all__ = [
     "transform_score_bounded",
     "PathAggregationVariableDetector",
     "PathAggregationExecutor",
+    "RegAggregationAlgorithmParameter",
+    "RegAggregationTaskRequest",
+    "RegAggregationTaskResult",
+    "RegAggregationDetectionResult",
+    "execute_optimization_task_reg_aggregation",
+    "worker_reg_aggregation_optimization_routine",
+    "RegAggregator",
+    "AggregatedRegScores",
+    "RegAggregationVariableDetector",
+    "RegAggregationExecutor",
 ]

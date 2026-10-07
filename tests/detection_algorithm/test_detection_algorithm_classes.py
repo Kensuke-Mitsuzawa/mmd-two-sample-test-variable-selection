@@ -14,11 +14,19 @@ from mmd_tst_variable_detector.detection_algorithm.baseline_mmd import (
     BaselineMmdResult,
     baseline_mmd,
 )
-from mmd_tst_variable_detector.detection_algorithm.detection_algorithm_one import (
+from mmd_tst_variable_detector.detection_algorithm.reg_selection import (
+    RegSelectionVariableDetector,
+    RegSelectionResult,
+    detection_reg_selection,
     AlgorithmOneVariableDetector,
     AlgorithmOneResult,
     detection_algorithm_one,
 )
+from mmd_tst_variable_detector.detection_algorithm.reg_aggregation_executor import (
+    RegAggregationVariableDetector,
+    PathAggregationVariableDetector,
+)
+
 from mmd_tst_variable_detector.detection_algorithm.cross_validation_detector.cross_validation_detector import (
     CrossValidationInterpretableVariableDetector,
     CrossValidationTrainedParameter,
@@ -36,11 +44,15 @@ from tests import data_generator
 
 
 def test_detector_inheritance_hierarchy():
-    """Verify all 3 detector classes inherit from BaseVariableDetector and BaseMmdOptimizationExecutor alias."""
+    """Verify all detector classes inherit from BaseVariableDetector and legacy aliases match."""
     assert BaseMmdOptimizationExecutor is BaseVariableDetector
     assert issubclass(CrossValidationInterpretableVariableDetector, BaseVariableDetector)
-    assert issubclass(AlgorithmOneVariableDetector, BaseVariableDetector)
+    assert issubclass(RegSelectionVariableDetector, BaseVariableDetector)
+    assert issubclass(RegAggregationVariableDetector, BaseVariableDetector)
     assert issubclass(BaselineMmdVariableDetector, BaseVariableDetector)
+    # Legacy aliases
+    assert AlgorithmOneVariableDetector is RegSelectionVariableDetector
+    assert PathAggregationVariableDetector is RegAggregationVariableDetector
 # end def
 
 
@@ -97,13 +109,15 @@ def test_cv_detector_run_detection_delegation():
 
 
 def test_algorithm_one_detector_delegation():
-    """Verify AlgorithmOneVariableDetector conforms to BaseVariableDetector and is invoked by detection_algorithm_one."""
-    assert issubclass(AlgorithmOneVariableDetector, BaseVariableDetector)
+    """Verify RegSelectionVariableDetector conforms to BaseVariableDetector and is aliased by AlgorithmOneVariableDetector."""
+    assert issubclass(RegSelectionVariableDetector, BaseVariableDetector)
+    assert AlgorithmOneVariableDetector is RegSelectionVariableDetector
+    assert detection_algorithm_one is detection_reg_selection
 
     dummy_estimator = MagicMock()
     dummy_train_param = MagicMock()
 
-    detector = AlgorithmOneVariableDetector(
+    detector = RegSelectionVariableDetector(
         estimator=dummy_estimator,
         base_training_parameter=dummy_train_param,
     )

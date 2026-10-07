@@ -379,8 +379,8 @@ class PostProcessLoggerHandler(object):
                 self._log_artifacts(logger_oject, target_object.selected_variables, __weights)
                 self._log_plot(logger_oject, weights=__weights)
             # end if
-        elif target_object.__class__.__name__ == "_AlgorithmOneRangeFunctionReturn":
-            # output from Algorithm One output.
+        elif target_object.__class__.__name__ in ("_RegSelectionRangeFunctionReturn", "_AlgorithmOneRangeFunctionReturn"):
+            # output from Regularization Selection (formerly Algorithm One) output.
             if target_object.p_value_test is None:
                 __p_value_test = -1.0
             else:
